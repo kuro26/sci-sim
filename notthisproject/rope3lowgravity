@@ -1,0 +1,18 @@
+import numpy as np
+
+# 给定真实参数
+p1 = np.array([-5, 0, 5])
+p2 = np.array([3, 4, 6])
+p3 = np.array([4, -3, 5.5])
+
+
+def func(x):
+    pos1 = x[[0, 1, 2]]
+    pos2 = x[[3, 4, 5]]
+    pos3 = x[[6, 7, 8]]
+
+
+for i in np.arange(-3, 2, 0.1):
+    for j in np.arange(-2, 3, 0.1):
+        for k in np.arange(1, 4, 0.1):
+            p = np.array([i, j, k])

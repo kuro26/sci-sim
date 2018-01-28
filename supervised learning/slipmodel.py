@@ -4,4 +4,3 @@ import matplotlib.pyplot as plt
 
 
 def support_fun(y, t):
-    
