@@ -23,7 +23,7 @@ sample_y = func(sample_x, [real_A, real_k, real_theta]) + np.random.randn(len(sa
 plt.plot(sample_x, sample_y, '-b')
 
 # 参数初值
-p0 = [9, 0.6, 0]
+p0 = [9, 0.5, 0]
 
 # 调用函数进行求解
 result = leastsq(residuals, p0, args=(sample_y, sample_x))
