@@ -2,6 +2,7 @@ import numpy as np
 from scipy import integrate
 import matplotlib.pyplot as plt
 from PIDdis import DisPid
+from linebezier import BezierD1
 
 
 # 模型，一个方向上的质量点与驱动力
@@ -11,28 +12,29 @@ def fun_mass_point(yin, t, f, m):
     return [v, f/m]
 
 
+# 质量点正弦运动驱动测试-PID没问题
 def mass_point_control_test():
-    sim_time = 8                         # 仿真时间
-    t_cycle = 0.01                       # 仿真时间间隔
-    step_cnt = int(sim_time/t_cycle)     # 仿真步数
+    sim_time = 8                          # 仿真时间
+    t_cycle = 0.01                        # 仿真时间间隔
+    step_cnt = int(sim_time/t_cycle)      # 仿真步数
     y0 = [0, 0]
-    pid1 = DisPid(30, 1, 3, gap=t_cycle) # PID控制器
-    mass = 1                             # 质量，1Kg
+    pid1 = DisPid(20, 1, 9, gap=t_cycle)  # PID控制器
+    mass = 1                              # 质量，1Kg
 
-    y_out = np.zeros((2, step_cnt))      # 输出数据
+    y_out = np.zeros((2, step_cnt))       # 输出数据
     t = np.zeros(step_cnt)
 
     for i in range(0, step_cnt-1):
         t[i] = t_cycle * i
         ts = [0, t_cycle]
-        ref = np.sin(t[i])               # 期望位置，正弦曲线
+        ref = np.sin(t[i])                # 期望位置，正弦曲线
         err = ref - y0[0]
         pid1.update(err)
-        f = pid1.out                     # 本周期PID控制量计算
+        f = pid1.out                      # 本周期PID控制量计算
         tmp = integrate.odeint(fun_mass_point, y0, ts, args=(f, mass))
-        y_out[0, i+1] = tmp[-1][0]       # 记录数据
+        y_out[0, i+1] = tmp[-1][0]        # 记录数据
         y_out[1, i+1] = tmp[-1][1]
-        y0 = [tmp[-1][0], tmp[-1][1]]    # 新的初始化
+        y0 = [tmp[-1][0], tmp[-1][1]]     # 新的初始化
     # 绘图
     plt.figure()
     plt.plot(t[0:-1], y_out[0][0:-1], 'b-', linewidth=2, label='real position')
@@ -41,4 +43,53 @@ def mass_point_control_test():
     plt.show()
 
 
-mass_point_control_test()
+# 贝塞尔函数测试
+def bezier_test():
+    cp_cnt = 6
+    bzr = BezierD1(cp_cnt-1, 2)            # 6个控制点，2条曲线
+    coe = np.array([[0, 0.2, 0.7, 0.4, 0.9, 0.5],
+                    [0, 0.6, 0.7, 0.4, 0.8, 0.6]])
+    x_begin = 0
+    x_end = 1
+    bzr.setControlPoint(coe)
+    bzr.setBezierBeginEnd(x_begin, x_end)
+    cp_x = np.linspace(x_begin, x_end, cp_cnt)
+    x_cnt = 100
+    x = np.linspace(x_begin, x_end, x_cnt+1)
+    res, y = bzr.value(x, diff=0)
+    if res is False:
+        return
+    # 绘图
+    plt.figure()
+    plt.plot(cp_x, bzr.coeff[0, :], 'r*')
+    plt.plot(cp_x, bzr.coeff[1, :], 'b+')
+    plt.plot(x, y[0, :], 'r-')
+    plt.plot(x, y[1, :], 'b-')
+    plt.title('function value')
+    plt.show()
+
+    res, dy = bzr.value(x, diff=1)
+    if res is False:
+        return
+    dis_dy = (y[:, 1:] - y[:, 0:-1])/((x_end - x_begin) / x_cnt)
+    dis_x = x[0: -1] + ((x_end - x_begin) / x_cnt)/2
+    # 绘图
+    plt.plot(x, dy[0, :], 'r-')
+    plt.plot(x, dy[1, :], 'b-')
+    plt.plot(dis_x, dis_dy[0, :], 'r+')
+    plt.plot(dis_x, dis_dy[1, :], 'b+')
+    plt.show()
+
+    res, ddy = bzr.value(x, diff=2)
+    if res is False:
+        return
+    dis_ddy = (dy[:, 1:] - dy[:, 0:-1]) / ((x_end - x_begin) / x_cnt)
+    # 绘图
+    plt.plot(x, ddy[0, :], 'r-')
+    plt.plot(x, ddy[1, :], 'b-')
+    plt.plot(dis_x, dis_ddy[0, :], 'r+')
+    plt.plot(dis_x, dis_ddy[1, :], 'b+')
+    plt.show()
+
+
+bezier_test()
