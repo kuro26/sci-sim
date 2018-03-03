@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 # 定义微分方程
 def diff_fun(y, t):
-    #print(t)
+    print(t)
     return [y[1], -2*y[0] - y[1]]
 
 
@@ -20,17 +20,19 @@ def main():
 
 def pend(y, t, b, c):
     theta, omega = y
-    dydt = [omega, -b*omega - c*np.sin(theta)]
-    return dydt
+    print(t)
+    dy_dt = [omega, -b*omega - c*np.sin(theta)]
+    return dy_dt
 
 
-b = 0.25
-c = 5.0
-y0 = [np.pi - 0.1, 0.0]
-t = np.linspace(0, 10, 101)
-sol = integrate.odeint(pend, y0, t, args=(b, c))
-plt.plot(t, sol[:, 0], 'b', label='theta(t)')
-plt.plot(t, sol[:, 1], 'g', label='omega(t)')
-plt.legend(loc='best')
-plt.xlabel('t')
-plt.grid()
+def pend_sim():
+    b = 0.25
+    c = 5.0
+    y0 = [np.pi - 0.1, 0.0]
+    t = np.linspace(0, 10, 101)
+    sol = integrate.odeint(pend, y0, t, args=(b, c))
+    plt.plot(t, sol[:, 0], 'b', label='theta(t)')
+    plt.plot(t, sol[:, 1], 'g', label='omega(t)')
+    plt.legend(loc='best')
+    plt.xlabel('t')
+    plt.grid()
