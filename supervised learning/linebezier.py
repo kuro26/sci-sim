@@ -1,4 +1,6 @@
 # 贝塞尔曲线的实现，将作为本次实验的轨迹表达方式
+# 当然，当你发现原来就有轮子的时候，你的心情是不那么好的，NURBS-python
+# pip install NURBS-Python 即可安装对应的库
 import numpy as np
 import scipy.special as sp
 
