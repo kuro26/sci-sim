@@ -4,11 +4,13 @@ import matplotlib.pyplot as plt
 from PIDdis import DisPid
 from linebezier import BezierD1
 from scipy.integrate import ode
+from geomdl import BSpline
+from geomdl import utilities
 
 
 # 模型，一个方向上的质量点与驱动力
 # 状态：x, v
-def fun_mass_point(yin, t, f, m):
+def fun_mass_point(yin, _, f, m):
     x, v = yin
     return [v, f/m]
 
@@ -95,14 +97,14 @@ def bezier_test():
 
 # 模型，一个方向上的质量点与驱动力
 # 状态：x, v
-def fun_mass_point2(t, y, arg1, arg2):
+def fun_mass_point2(_, y, arg1, arg2):
     # print(t)
     x, v = y
     f, m = arg1, arg2
     return [v, f/m]
 
 
-def fun_mass_point_end(t, yin):
+def fun_mass_point_end(_, yin):
     x, v = yin
     if x > 2:
         # 出现终止条件
@@ -139,7 +141,7 @@ def ode_test():
         t.append(solver.t)
         x.append(solver.y[0])
         v.append(solver.y[1])
-    print('solver t',solver.t)
+    print('solver t', solver.t)
     print('get t', t[-1])
     print('solver solution', solver.y)
     print('get solution', [x[-1], v[-1]])
@@ -148,5 +150,47 @@ def ode_test():
     plt.show()
 
 
+# nurbs-python测试
+# 一阶导数，二阶导数测试
+def nurbs_test():
+    curve = BSpline.Curve()
+    curve.ctrlpts = ((3.0,), (1.0, ), (3.0, ), (2.0, ), (5.0, ))
+    curve.delta = 0.01
+    curve.degree = 4                # degree应该小于控制点数量
+    # 自动计算knot point
+    curve.knotvector = utilities.generate_knot_vector(curve.degree, len(curve.ctrlpts))
+    curve.evaluate()
+    pt_y = []
+    pt_x = np.linspace(0, 1, 101)
+    dpt_y = []
+    ddpt_y = []
+    for pt in pt_x:
+        tmp = curve.derivatives(pt, order=2)
+        pt_y.append(tmp[0][0])
+        dpt_y.append(tmp[1][0])
+        ddpt_y.append(tmp[2][0])
+    ctrl_x = np.linspace(0, 1, 5)
+    ctrl_y = []
+    for item in curve.ctrlpts:
+        ctrl_y.append(item[0])
+    plt.plot(pt_x, pt_y, 'b-')
+    plt.plot(ctrl_x, ctrl_y, 'r*')
+    plt.grid()
+    plt.show()
+    # 验证一阶求导的正确性
+    pt_y = np.array(pt_y)
+    dpt_y = np.array(dpt_y)
+    dpt_y_dis = (pt_y[1:] - pt_y[:-1])/(pt_x[1]-pt_x[0])
+    ddpt_y_dis = (dpt_y[1:] - dpt_y[:-1])/(pt_x[1]-pt_x[0])
+    pt_x_dis = pt_x[:-1]+(pt_x[1]-pt_x[0])/2
+    # 绘制一阶的
+    plt.plot(pt_x_dis, dpt_y_dis, '+r')
+    plt.plot(pt_x, dpt_y, '-b')
+    plt.show()
+    # 绘制二阶的
+    plt.plot(pt_x_dis, ddpt_y_dis, '+r')
+    plt.plot(pt_x, ddpt_y, '-b')
+    plt.show()
 
-ode_test()
+
+nurbs_test()

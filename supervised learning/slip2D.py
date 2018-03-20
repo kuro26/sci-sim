@@ -43,7 +43,7 @@ def fun_air(yin, _, g):
 # alpha, beta, 触地角度和离地角度
 # l1, l2, l3, l4，曲线中间的控制点
 # ------------------------------------
-def sim_model(h0, v0, alpha, theta, l1, l2, l3, l4, l5, beta):
+def sim_model(h0, v0, alpha, theta1, l1, l2, l3, l4, l5, beta):
     m = 20
     t_cycle = 0.005            # 对应5ms的控制周期
     g = 9.8                    # 重力加速度
@@ -69,12 +69,20 @@ def sim_model(h0, v0, alpha, theta, l1, l2, l3, l4, l5, beta):
     # 支撑阶段
     xs = x[-1] + leg_len_ori * np.cos(alpha)
     ys = y[-1] - leg_len_ori * np.sin(alpha)
+    phase = 1                       # 我们把支撑过程分为两段
+    last_theta = alpha
     while True:
         # 计算控制量
+        le = np.sqrt(np.power(x[-1]-xs,2) + np.power(y[-1]-ys,2))   # 当前的腿长
+        theta = np.pi - np.arctan2(y[-1]-ys, x[-1]-xs)              # 计算角度
+        d_theta = (vy[-1]*np.cos(theta) + vx*np.sin(theta)) / le    # 沿杆方向速度/杆长= 角速度
+
+        mpc_u = m*(-le*d_theta*d_theta + g*np.sin(theta) +)
         f = 0
         ts = [t[-1], t[-1] + t_cycle]
         y0 = [x[-1], vx[-1], y[-1], vy[-1]]              # 状态是统一的
         tmp = integrate.odeint(fun_support, y0, ts, arg=(m, xs, ys, f, g))
+        last_theta = theta
 
 
 
