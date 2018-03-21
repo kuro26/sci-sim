@@ -12,6 +12,7 @@
 import numpy as np
 from scipy import integrate
 import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
 
 
 # ------------------------------------------------
@@ -20,7 +21,7 @@ import matplotlib.pyplot as plt
 #               腿长     支撑点   控制足力
 # g = -9.8
 # ------------------------------------------------
-def sys_support(t, yin, para):
+def sys_support(_, yin, para):
     m, g, l0, x_f, y_f, z_f, f = para
     x, y, z, vx, vy, vz = yin
 
@@ -41,10 +42,28 @@ def sys_air(_, yin, g):
 
 
 # 所有事件均从正向负数
-def event_touchdown(t, yin, alpha, beta, l0):
+def event_touchdown(_, yin, alpha, beta, l0):
     x, y, z, vx, vy, vz = yin
     delta_h = l0 * np.cos(beta) * np.sin(np.pi - alpha)
-    return z-delta_h
+    return z - delta_h                      # 从正到负
+
+
+def event_shortest(_, yin, x_f, y_f, z_f):
+    x, y, z, vx, vy, vz = yin
+    tmp1 = [x - x_f, y - y_f, z - z_f]
+    tmp2 = [vx, vy, vz]
+    return -np.dot(tmp1, tmp2)               # 从正到负
+
+
+def event_thrust(_, yin, x_f, y_f, z_f, l0):
+    x, y, z, vx, vy, vz = yin
+    leg_len = np.linalg.norm([x - x_f, y - y_f, z - z_f])
+    return l0 - leg_len                     # 从正到负
+
+
+def event_top(_, yin):
+    x, y, z, vx, vy, vz = yin
+    return vz                               # 从正到负
 
 
 # ------------------------------------------------
@@ -53,139 +72,76 @@ def event_touchdown(t, yin, alpha, beta, l0):
 # output: 仿真轨迹
 # 后续使用仿真轨迹进行实际机器人的规划设计或者绘图都OK
 # ------------------------------------------------
-class SlipData:
-    def __init__(self, h0, vx0, vy0):
-        self.t = [0.0]                 # 系统状态
-        self.x = [0.0]
-        self.y = [0.0]
-        self.z = [h0]
-        self.vx = [vx0]
-        self.vy = [vy0]
-        self.vz = [0.0]
-        self.te1, self.te1_idx = 0.0, 0  # 结束点1
-        self.te2, self.te2_idx = 0.0, 0  # 结束点2
-        self.te3, self.te3_idx = 0.0, 0  # 结束点3
-        self.x_f, self.y_f, self.z_f = 0.0, 0.0, 0.0     # 触地点
-
-    # 添加一组仿真更新的数据
-    def status_update(self, ts, tmp):
-        self.t.append(ts[1])
-        self.x.append(tmp[-1][0])
-        self.y.append(tmp[-1][1])
-        self.z.append(tmp[-1][2])
-        self.vx.append(tmp[-1][3])
-        self.vy.append(tmp[-1][4])
-        self.vz.append(tmp[-1][5])
-
-    def get_recent_status(self):
-        return [self.x[-1], self.y[-1], self.z[-1], self.vx[-1], self.vy[-1], self.vz[-1]]
-
-    def plot_trajectory(self):
-        # fig = plt.figure()
-        ax = plt.axes(projection='3d')
-        b, e = 0, self.te1_idx
-        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'r')
-        b, e = self.te1_idx, self.te2_idx
-        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'b')
-        b, e = self.te2_idx, self.te3_idx
-        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'g')
-        b, e = self.te3_idx, len(self.t)-1
-        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'b')
-        ax.scatter3D([0.0], [0.0], [0.0], '*')
-        ax.scatter3D([self.x_f], [self.y_f], [self.z_f], 'r*')
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-        # ax.view_init(0, 10)
-
-        plt.show()
-
-
 def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
     m, g, l0 = [30.0, -9.8, 1.0]
-    t_cycle = 0.005
+    t_span = (0, 5)
+    options = {'rtol': 1e-9, 'atol': 1e-12 }
 
     # 初始化数据存储变量
-    data_sim = SlipData(h0, vx0, vy0)
     # ------------1.空中下落阶段------------
-    loop_counter = int(5 / t_cycle)
-    while loop_counter:
-        loop_counter = loop_counter - 1
-        ts = [data_sim.t[-1], data_sim.t[-1] + t_cycle]
-        init_s = data_sim.get_recent_status()
-        tmp = integrate.odeint(sys_air, init_s, ts, args=(g,))
-        # 更新存储数据
-        data_sim.status_update(ts, tmp)
-        # 触地判定
-        delta_h = l0 * np.cos(beta) * np.sin(np.pi - alpha)
-        if data_sim.z[-1] < delta_h:
-            break
-    if loop_counter == 0:
-        print('Error: loop 1 too long')
-        return
-    x_f = data_sim.x[-1] + l0*np.cos(beta)*np.cos(alpha)                  # 计算落足点(考虑vector与x轴的关系)
-    y_f = data_sim.y[-1] + l0*np.sin(beta)
-    z_f = data_sim.z[-1] - l0 * np.cos(beta) * np.sin(np.pi - alpha)
-    data_sim.x_f, data_sim.y_f, data_sim.z_f = x_f, y_f, z_f              # 记录--着地点足位置
-    data_sim.te1, data_sim.te1_idx = data_sim.t[-1], len(data_sim.t)-1    # 记录--落地时间
+    # sys_fun = lambda t, y: sys_air(t, y, g)
+    def sys_fun(t, y): return sys_air(t, y, g)
+
+    def event_fun(t, y): return event_touchdown(t, y, alpha, beta, l0)
+    event_fun.direction = -1
+    event_fun.terminal = True
+    init_s = [0.0, 0.0, h0, vx0, vy0, 0.0]
+    in_sol1 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
+
+    last_y = in_sol1.y[:, -1]
+    x_f = last_y[0] + l0 * np.cos(beta) * np.cos(alpha)                  # 计算落足点(考虑vector与x轴的关系)
+    y_f = last_y[1] + l0 * np.sin(beta)
+    z_f = last_y[2] - l0 * np.cos(beta) * np.sin(np.pi - alpha)
 
     # ------------2.支撑压缩阶段------------
-    loop_counter = int(5 / t_cycle)
-    while loop_counter:
-        loop_counter = loop_counter - 1
-        ts = [data_sim.t[-1], data_sim.t[-1] + t_cycle]
-        init_s = data_sim.get_recent_status()
-        tmp = [data_sim.x[-1]-x_f, data_sim.y[-1]-y_f, data_sim.z[-1]-z_f]
-        f = ks1 * (l0 - np.linalg.norm(tmp))                              # 控制力计算
-        para = [m, g, l0, x_f, y_f, z_f, f]
-        tmp = integrate.odeint(sys_support, init_s, ts, args=(para,))     # 仿真
-        # 更新存储数据
-        data_sim.status_update(ts, tmp)
-        # 判定是否达到最大压缩量（计算速度方向和腿向量的点积）
-        tmp1 = [data_sim.x[-1] - x_f, data_sim.y[-1] - y_f, data_sim.z[-1] - z_f]
-        tmp2 = [data_sim.vx[-1], data_sim.vy[-1], data_sim.vz[-1]]
-        if np.dot(tmp1, tmp2) > 0:
-            break
-    if loop_counter == 0:
-        print('Error: loop 2 too long')
-        return
-    data_sim.te2, data_sim.te2_idx = data_sim.t[-1], len(data_sim.t) - 1  # 记录--落地时间点
+    def sys_fun(t, yin):
+        x, y, z, vx, vy, vz = yin
+        inner_tmp = [x - x_f, y - y_f, z - z_f]
+        inner_force = ks1 * (l0 - np.linalg.norm(inner_tmp))
+        inner_para = [m, g, l0, x_f, y_f, z_f, inner_force]
+        return sys_support(t, yin, inner_para)
+
+    def event_fun(t, yin): return event_shortest(t, yin, x_f, y_f, z_f)
+    event_fun.direction = -1
+    event_fun.terminal = True
+    init_s = in_sol1.y[:, -1]
+    in_sol2 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
 
     # ------------3.支撑弹射阶段------------
-    loop_counter = int(5 / t_cycle)
-    while loop_counter:
-        loop_counter = loop_counter - 1
-        ts = [data_sim.t[-1], data_sim.t[-1] + t_cycle]
-        init_s = data_sim.get_recent_status()
-        tmp = [data_sim.x[-1] - x_f, data_sim.y[-1] - y_f, data_sim.z[-1] - z_f]
-        f = ks2 * (l0 - np.linalg.norm(tmp))                              # 控制力计算
-        para = [m, g, l0, x_f, y_f, z_f, f]
-        tmp = integrate.odeint(sys_support, init_s, ts, args=(para,))     # 仿真
-        # 更新存储数据
-        data_sim.status_update(ts, tmp)
-        # 判定是否离开地面
-        leg_len = np.linalg.norm([data_sim.x[-1] - x_f, data_sim.y[-1] - y_f, data_sim.z[-1] - z_f])
-        if leg_len > l0:
-            break
-    if loop_counter == 0:
-        print('Error: loop 3 too long')
-        return
-    data_sim.te3, data_sim.te3_idx = data_sim.t[-1], len(data_sim.t) - 1  # 记录--落地时间点
+    def sys_fun(t, yin):
+        x, y, z, vx, vy, vz = yin
+        inner_tmp = [x - x_f, y - y_f, z - z_f]
+        inner_force = ks2 * (l0 - np.linalg.norm(inner_tmp))
+        inner_para = [m, g, l0, x_f, y_f, z_f, inner_force]
+        return sys_support(t, yin, inner_para)
+
+    def event_fun(t, yin): return event_thrust(t, yin, x_f, y_f, z_f, l0)
+    event_fun.direction = -1
+    event_fun.terminal = True
+    init_s = in_sol2.y[:, -1]
+    in_sol3 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
 
     # ------------3.飞升阶段------------
-    while True:
-        ts = [data_sim.t[-1], data_sim.t[-1] + t_cycle]
-        init_s = data_sim.get_recent_status()
-        tmp = integrate.odeint(sys_air, init_s, ts, args=(g,))
-        # 更新存储数据
-        data_sim.status_update(ts, tmp)
-        # 达到顶点判定
-        if data_sim.vz[-1] < 0:
-            break
+    def sys_fun(t, yin): return sys_air(t, yin, g)
+
+    def event_fun(t, yin): return event_top(t, yin)
+    event_fun.direction = -1
+    event_fun.terminal = True
+    init_s = in_sol3.y[:, -1]
+    in_sol4 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
+
     print('simulation finished!')
-    return data_sim
+    in_foot_point = [x_f, y_f, z_f]
+    return [in_sol1, in_sol2, in_sol3, in_sol4, in_foot_point]
 
 
 #                触地角1 触地角2  刚度1    刚度2  x速度  y速度 初始高度
-data = sim_cycle(1.1577,   0,   6.05e3, 6.05e3, 3.5,   0,   0.94)
-data.plot_trajectory()
+sol1, sol2, sol3, sol4, foot_point = sim_cycle(1.1577,   0,   6.05e3, 6.05e3, 3.5,   0,   0.94)
+ax = plt.axes(projection='3d')
+ax.plot(sol1.y[0, :], sol1.y[1, :], sol1.y[2, :], 'r')
+ax.plot(sol2.y[0, :], sol2.y[1, :], sol2.y[2, :], 'g')
+ax.plot(sol3.y[0, :], sol3.y[1, :], sol3.y[2, :], 'b')
+ax.plot(sol4.y[0, :], sol4.y[1, :], sol4.y[2, :], 'r')
+ax.plot([0], [0], [0], '*r')
+ax.plot([foot_point[0]], [foot_point[1]], [foot_point[2]], '*b')
+plt.show()
