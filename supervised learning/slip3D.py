@@ -10,6 +10,7 @@
 import numpy as np
 from scipy import integrate
 import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
 
 
 # ------------------------------------------------
@@ -71,9 +72,29 @@ class SlipData:
     def get_recent_status(self):
         return [self.x[-1], self.y[-1], self.z[-1], self.vx[-1], self.vy[-1], self.vz[-1]]
 
+    def plot_trajectory(self):
+        fig = plt.figure()
+        ax = plt.axes(projection='3d')
+        b, e = 0, self.te1_idx
+        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'r')
+        b, e = self.te1_idx, self.te2_idx
+        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'b')
+        b, e = self.te2_idx, self.te3_idx
+        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'g')
+        b, e = self.te3_idx, len(self.t)-1
+        ax.plot3D(self.x[b:e], self.y[b:e], self.z[b:e], 'b')
+        ax.scatter3D([0.0], [0.0], [0.0], '*')
+        ax.scatter3D([self.x_f], [self.y_f], [self.z_f], 'r*')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_zlabel('z')
+        # ax.view_init(0, 10)
+
+        plt.show()
+
 
 def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
-    m, g, l0 = [20.0, -9.8, 1.0]
+    m, g, l0 = [30.0, -9.8, 1.0]
     t_cycle = 0.005
 
     # 初始化数据存储变量
@@ -118,7 +139,7 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
         if np.dot(tmp1, tmp2) > 0:
             break
     if loop_counter == 0:
-        print('Error: loop 1 too long')
+        print('Error: loop 2 too long')
         return
     data_sim.te2, data_sim.te2_idx = data_sim.t[-1], len(data_sim.t) - 1  # 记录--落地时间点
 
@@ -139,16 +160,23 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
         if leg_len > l0:
             break
     if loop_counter == 0:
-        print('Error: loop 1 too long')
+        print('Error: loop 3 too long')
         return
     data_sim.te3, data_sim.te3_idx = data_sim.t[-1], len(data_sim.t) - 1  # 记录--落地时间点
 
     # ------------3.飞升阶段------------
-    loop_counter = int(5 / t_cycle)
-    while loop_counter:
-        loop_counter = loop_counter - 1
+    while True:
         ts = [data_sim.t[-1], data_sim.t[-1] + t_cycle]
         init_s = data_sim.get_recent_status()
+        tmp = integrate.odeint(sys_air, init_s, ts, args=(g,))
+        # 更新存储数据
+        data_sim.status_update(ts, tmp)
+        # 达到顶点判定
+        if data_sim.vz[-1] < 0:
+            break
+    print('simulation finished!')
+    return data_sim
 
 
-
+data = sim_cycle(1.1577, 0, 6.05e3, 6.05e3, 3.5, 0, 0.94)
+data.plot_trajectory()
