@@ -6,13 +6,12 @@
 # 系统状态：y = [x, y, z, vx, vy, vz]
 # 初始条件：y0 = [h0, vx0, vy0]
 # 添加说明1：（2018/3/21）
-#   该文件使用的是scipy中较早的积分器，实际上有新的可用积分器
+#   在slip3d的基础上使用新的scipy积分器，这个有事件判定
 # -----------------------------------------------
 
 import numpy as np
 from scipy import integrate
 import matplotlib.pyplot as plt
-# from mpl_toolkits import mplot3d
 
 
 # ------------------------------------------------
@@ -21,7 +20,7 @@ import matplotlib.pyplot as plt
 #               腿长     支撑点   控制足力
 # g = -9.8
 # ------------------------------------------------
-def sys_support(yin, _, para):
+def sys_support(t, yin, para):
     m, g, l0, x_f, y_f, z_f, f = para
     x, y, z, vx, vy, vz = yin
 
@@ -36,9 +35,16 @@ def sys_support(yin, _, para):
     return [vx, vy, vz, ddx, ddy, ddz]
 
 
-def sys_air(yin, _, g):
+def sys_air(_, yin, g):
     x, y, z, vx, vy, vz = yin
     return [vx, vy, vz, 0, 0, g]
+
+
+# 所有事件均从正向负数
+def event_touchdown(t, yin, alpha, beta, l0):
+    x, y, z, vx, vy, vz = yin
+    delta_h = l0 * np.cos(beta) * np.sin(np.pi - alpha)
+    return z-delta_h
 
 
 # ------------------------------------------------
