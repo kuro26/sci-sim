@@ -181,5 +181,5 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
 
 
 #                触地角1 触地角2  刚度1    刚度2  x速度  y速度 初始高度
-data = sim_cycle(1.1577,   0,   6.05e3, 6.05e3, 3.5,   0,   0.94)
+data = sim_cycle(1.1577,   0,   6.05e3, 6.05e3, 4.5,   0,   0.94)
 data.plot_trajectory()

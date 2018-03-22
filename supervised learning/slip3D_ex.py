@@ -13,6 +13,7 @@ import numpy as np
 from scipy import integrate
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
+import pandas as pd
 
 
 # ------------------------------------------------
@@ -74,7 +75,8 @@ def event_top(_, yin):
 # ------------------------------------------------
 def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
     m, g, l0 = [30.0, -9.8, 1.0]
-    t_span = (0, 5)
+    t_span = (0, 2)
+    t_eval = np.linspace(0, 2, 500)
     options = {'rtol': 1e-9, 'atol': 1e-12 }
 
     # 初始化数据存储变量
@@ -86,7 +88,7 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
     event_fun.direction = -1
     event_fun.terminal = True
     init_s = [0.0, 0.0, h0, vx0, vy0, 0.0]
-    in_sol1 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
+    in_sol1 = integrate.solve_ivp(sys_fun, t_span, init_s, t_eval=t_eval, events=event_fun, **options)
 
     last_y = in_sol1.y[:, -1]
     x_f = last_y[0] + l0 * np.cos(beta) * np.cos(alpha)                  # 计算落足点(考虑vector与x轴的关系)
@@ -105,7 +107,7 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
     event_fun.direction = -1
     event_fun.terminal = True
     init_s = in_sol1.y[:, -1]
-    in_sol2 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
+    in_sol2 = integrate.solve_ivp(sys_fun, t_span, init_s, t_eval=t_eval, events=event_fun, **options)
 
     # ------------3.支撑弹射阶段------------
     def sys_fun(t, yin):
@@ -119,7 +121,7 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
     event_fun.direction = -1
     event_fun.terminal = True
     init_s = in_sol2.y[:, -1]
-    in_sol3 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
+    in_sol3 = integrate.solve_ivp(sys_fun, t_span, init_s, t_eval=t_eval, events=event_fun, **options)
 
     # ------------3.飞升阶段------------
     def sys_fun(t, yin): return sys_air(t, yin, g)
@@ -128,7 +130,7 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
     event_fun.direction = -1
     event_fun.terminal = True
     init_s = in_sol3.y[:, -1]
-    in_sol4 = integrate.solve_ivp(sys_fun, t_span, init_s, events=event_fun, **options)
+    in_sol4 = integrate.solve_ivp(sys_fun, t_span, init_s, t_eval=t_eval, events=event_fun, **options)
 
     print('simulation finished!')
     in_foot_point = [x_f, y_f, z_f]
@@ -136,7 +138,7 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
 
 
 #                触地角1 触地角2  刚度1    刚度2  x速度  y速度 初始高度
-sol1, sol2, sol3, sol4, foot_point = sim_cycle(1.1577,   0,   6.05e3, 6.05e3, 3.5,   0,   0.94)
+sol1, sol2, sol3, sol4, foot_point = sim_cycle(1.1577,   0,   6.05e3, 6.05e3, 4.5,   0,   0.94)
 ax = plt.axes(projection='3d')
 ax.plot(sol1.y[0, :], sol1.y[1, :], sol1.y[2, :], 'r')
 ax.plot(sol2.y[0, :], sol2.y[1, :], sol2.y[2, :], 'g')
@@ -145,3 +147,9 @@ ax.plot(sol4.y[0, :], sol4.y[1, :], sol4.y[2, :], 'r')
 ax.plot([0], [0], [0], '*r')
 ax.plot([foot_point[0]], [foot_point[1]], [foot_point[2]], '*b')
 plt.show()
+
+# 存储数据为csv文件
+pd.DataFrame(sol1.y).to_csv('data/sol1.csv')
+pd.DataFrame(sol2.y).to_csv('data/sol2.csv')
+pd.DataFrame(sol3.y).to_csv('data/sol3.csv')
+pd.DataFrame(sol4.y).to_csv('data/sol4.csv')

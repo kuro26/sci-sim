@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<robot name="biped-one">
+	<link name="torso">
+		<visual>
+			<geometry>
+                <box size="0.12 0.25 0.4"/>
+			</geometry>
+            <material name="blue">
+                <color rgba="0 0 .8 1"/>
+            </material>
+		</visual>
+        <collision>
+            <geometry>
+                <box size="0.12 0.25 0.4"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="20"/>
+            <inertia ixx="0.37" ixy="0.0" ixz="0.0" iyy="0.29" iyz="0.0" izz="0.128"/>
+        </inertial>
+	</link>
+
+    <link name="left-block">
+        <visual>
+            <geometry>
+                <box size="0.06 0.06 0.06"/>
+            </geometry>
+            <origin rpy="0 1.57075 0" xyz="0 0 -0.3"/>
+            <material name="white">
+                <color rgba="1 1 1 1"/>
+            </material>
+        </visual>
+    </link>
+</robot>
