@@ -8,7 +8,11 @@ p.setAdditionalSearchPath(pybullet_data.getDataPath())
 p.setGravity(0, 0, -10)
 
 # 创建模型
-
+planeId = p.loadURDF("plane.urdf")
+cubeStartPos = [0, 0, 1]
+cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
+boxId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
+p.resetBaseVelocity(boxId, {'linearVelocity': [1, 0, 0]})
 # 仿真循环
 for i in range(1000):
     p.stepSimulation()
