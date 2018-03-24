@@ -10,4 +10,4 @@ def box_inertia(shape, m):
     return [ixx, iyy, izz]
 
 
-box_inertia([0.12, 0.25, 0.4], 20)
+box_inertia([0.05, 0.05, 0.5], 2)

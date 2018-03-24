@@ -12,9 +12,10 @@ planeId = p.loadURDF("plane.urdf")
 cubeStartPos = [0, 0, 1]
 cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
 boxId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
-p.resetBaseVelocity(boxId, {'linearVelocity': [1, 0, 0]})
+p.resetBaseVelocity(boxId, [1, 0, 0])
+
 # 仿真循环
-for i in range(1000):
+for i in range(500):
     p.stepSimulation()
     time.sleep(1./240.)
 
