@@ -11,12 +11,16 @@ p.setGravity(0, 0, -10)
 planeId = p.loadURDF("plane.urdf")
 cubeStartPos = [0, 0, 1.5]
 cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
-boxId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
-p.resetBaseVelocity(boxId, [1, 0, 0])
+RobotId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
+p.resetBaseVelocity(RobotId, [0, 0, 0])
+mode = p.VELOCITY_CONTROL
+# p.setJointMotorControl2(RobotId, 0, mode, targetVelocity=1, force=100)
+# p.setJointMotorControl2(RobotId, 1, mode, targetVelocity=1, force=100)
+p.setJointMotorControl2(RobotId, 4, mode, targetVelocity=1, force=100)
 
 # 仿真循环
-for i in range(300):
+for i in range(200):
     p.stepSimulation()
-    time.sleep(1./10.)
+    time.sleep(1./100.0)
 
 p.disconnect()
