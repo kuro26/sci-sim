@@ -70,14 +70,16 @@ def event_top(_, yin):
 # ------------------------------------------------
 #              一个周期的仿真
 # input: 控制变量 = [alpha, beta, ks1, ks2, vx0, vy0, h0]
+#        改为初始-控制对：pairs = [h0, vx0, vy0, alpha, beta, ks1, ks2]
 # output: 仿真轨迹
 # 后续使用仿真轨迹进行实际机器人的规划设计或者绘图都OK
 # ------------------------------------------------
-def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
+def sim_cycle(pairs):
+    h0, vx0, vy0, alpha, beta, ks1, ks2 = pairs
     m, g, l0 = [30.0, -9.8, 1.0]
     t_span = (0, 2)
     t_eval = np.linspace(0, 2, 500)
-    options = {'rtol': 1e-9, 'atol': 1e-12 }
+    options = {'rtol': 1e-9, 'atol': 1e-12}
 
     # 初始化数据存储变量
     # ------------1.空中下落阶段------------
@@ -137,19 +139,19 @@ def sim_cycle(alpha, beta, ks1, ks2, vx0, vy0, h0):
     return [in_sol1, in_sol2, in_sol3, in_sol4, in_foot_point]
 
 
-#                触地角1 触地角2  刚度1    刚度2  x速度  y速度 初始高度
-sol1, sol2, sol3, sol4, foot_point = sim_cycle(1.1577,   0,   6.05e3, 6.05e3, 4.5,   0,   0.94)
-ax = plt.axes(projection='3d')
-ax.plot(sol1.y[0, :], sol1.y[1, :], sol1.y[2, :], 'r')
-ax.plot(sol2.y[0, :], sol2.y[1, :], sol2.y[2, :], 'g')
-ax.plot(sol3.y[0, :], sol3.y[1, :], sol3.y[2, :], 'b')
-ax.plot(sol4.y[0, :], sol4.y[1, :], sol4.y[2, :], 'r')
-ax.plot([0], [0], [0], '*r')
-ax.plot([foot_point[0]], [foot_point[1]], [foot_point[2]], '*b')
-plt.show()
-
-# 存储数据为csv文件
-pd.DataFrame(sol1.y).to_csv('data/sol1.csv')
-pd.DataFrame(sol2.y).to_csv('data/sol2.csv')
-pd.DataFrame(sol3.y).to_csv('data/sol3.csv')
-pd.DataFrame(sol4.y).to_csv('data/sol4.csv')
+# 测试：sim_cycle_test([.94, 4.5, 0, 1.1577, 0, 6.05e3, 6.05e3])
+def sim_cycle_test(pairs):
+    sol1, sol2, sol3, sol4, foot_point = sim_cycle(pairs)
+    ax = plt.axes(projection='3d')
+    ax.plot(sol1.y[0, :], sol1.y[1, :], sol1.y[2, :], 'r')
+    ax.plot(sol2.y[0, :], sol2.y[1, :], sol2.y[2, :], 'g')
+    ax.plot(sol3.y[0, :], sol3.y[1, :], sol3.y[2, :], 'b')
+    ax.plot(sol4.y[0, :], sol4.y[1, :], sol4.y[2, :], 'r')
+    ax.plot([0], [0], [0], '*r')
+    ax.plot([foot_point[0]], [foot_point[1]], [foot_point[2]], '*b')
+    plt.show()
+    # 存储数据为csv文件
+    # pd.DataFrame(sol1.y).to_csv('data/sol1.csv')
+    # pd.DataFrame(sol2.y).to_csv('data/sol2.csv')
+    # pd.DataFrame(sol3.y).to_csv('data/sol3.csv')
+    # pd.DataFrame(sol4.y).to_csv('data/sol4.csv')
