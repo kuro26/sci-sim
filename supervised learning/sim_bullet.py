@@ -16,10 +16,10 @@ p.resetBaseVelocity(RobotId, [0, 0, 0])
 mode = p.VELOCITY_CONTROL
 # p.setJointMotorControl2(RobotId, 0, mode, targetVelocity=1, force=100)
 # p.setJointMotorControl2(RobotId, 1, mode, targetVelocity=1, force=100)
-p.setJointMotorControl2(RobotId, 4, mode, targetVelocity=1, force=100)
+# p.setJointMotorControl2(RobotId, 4, mode, targetVelocity=1, force=100)
 
 # 仿真循环
-for i in range(200):
+for i in range(600):
     p.stepSimulation()
     time.sleep(1./100.0)
 

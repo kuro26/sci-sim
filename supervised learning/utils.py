@@ -1,5 +1,6 @@
 # 一些编程过程中可能会用到的工具
 import numpy as np
+import pandas as pd
 
 
 def box_inertia(shape, m):
