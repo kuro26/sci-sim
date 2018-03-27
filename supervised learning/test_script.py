@@ -21,13 +21,13 @@ for col in range(7):
     if dm_pair[col] < 10:  # 数值计算delta的选取
         dx = 0.001
     else:
-        dx = dm_pair[col] * 0.001
+        dx = dm_pair[col] * 0.0001
     dm_pair[col] = dm_pair[col] + dx
     dm_apex = get_next_apex_status(dm_pair)
     res = (dm_apex - m_apex) / dx
     jac_combine[:, col] = np.array(res).transpose()
-jac_x = jac_combine[:, 0:3]
-jac_u = jac_combine[:, 3:8]
+jac_x = jac_combine[:, 0: 3]
+jac_u = jac_combine[:, 3: 7]
 
 jac_u_2 = jac_u[:, 0:3]
 print(jac_u_2)
