@@ -1,43 +1,49 @@
-from geomdl import BSpline
-from geomdl import utilities
-import numpy as np
-import matplotlib.pyplot as plt
 
-curve = BSpline.Curve()
-curve.ctrlpts = ((3.0,), (1.0,), (3.0,), (2.0,), (5.0,))
-curve.delta = 0.01
-curve.degree = 4  # degree应该小于控制点数量
-# 自动计算knot point
-curve.knotvector = utilities.generate_knot_vector(curve.degree, len(curve.ctrlpts))
-curve.evaluate()
-pt_y = []
-pt_x = np.linspace(0, 1, 101)
-dpt_y = []
-ddpt_y = []
-for pt in pt_x:
-    tmp = curve.derivatives(pt, order=2)
-    pt_y.append(tmp[0][0])
-    dpt_y.append(tmp[1][0])
-    ddpt_y.append(tmp[2][0])
-ctrl_x = np.linspace(0, 1, 5)
-ctrl_y = []
-for item in curve.ctrlpts:
-    ctrl_y.append(item[0])
-plt.plot(pt_x, pt_y, 'b-')
-plt.plot(ctrl_x, ctrl_y, 'r*')
-plt.grid()
-plt.show()
-# 验证一阶求导的正确性
-pt_y = np.array(pt_y)
-dpt_y = np.array(dpt_y)
-dpt_y_dis = (pt_y[1:] - pt_y[:-1]) / (pt_x[1] - pt_x[0])
-ddpt_y_dis = (dpt_y[1:] - dpt_y[:-1]) / (pt_x[1] - pt_x[0])
-pt_x_dis = pt_x[:-1] + (pt_x[1] - pt_x[0]) / 2
-# 绘制一阶的
-plt.plot(pt_x_dis, dpt_y_dis, '+r')
-plt.plot(pt_x, dpt_y, '-b')
-plt.show()
-# 绘制二阶的
-plt.plot(pt_x_dis, ddpt_y_dis, '+r')
-plt.plot(pt_x, ddpt_y, '-b')
-plt.show()
+import slip3D_ex
+import pandas as pd
+import numpy as np
+
+
+def get_next_apex_status(pair):
+    sol1, sol2, sol3, sol4, foot_point = slip3D_ex.sim_cycle(pair)
+    return sol4.y[:, -1][2:5]
+
+
+m_table = pd.read_csv('./data/stable_pair.csv', header=None).values
+vel_list = m_table[:, 1]
+m_idx = np.fabs(vel_list - 4.25).argmin()
+m_pair = m_table[m_idx]
+# Jacobian x的计算
+jac_x = np.zeros(shape=(3, 3))
+for col in range(3):
+    dm_pair = np.array(m_pair)
+    if dm_pair[col] < 10:
+        dx = 0.001
+    else:
+        dx = dm_pair[col] * 0.001
+    dm_pair[col] = dm_pair[col] + dx
+    m_apex = get_next_apex_status(m_pair)
+    dm_apex = get_next_apex_status(dm_pair)
+    res = (dm_apex - m_apex) / dx
+    print('col:', col)
+    print(res)
+    jac_x[:, col] = np.array(res).transpose()
+    print(jac_x)
+
+# Jacobian u的计算
+jac_u = np.zeros(shape=(3, 4))
+col_list = [3, 4, 5, 6]
+for col in col_list:
+    dm_pair = np.array(m_pair)
+    if dm_pair[col] < 10:
+        dx = 0.001
+    else:
+        dx = dm_pair[col] * 0.001
+    dm_pair[col] = dm_pair[col] + dx
+    m_apex = get_next_apex_status(m_pair)
+    dm_apex = get_next_apex_status(dm_pair)
+    res = (dm_apex - m_apex) / dx
+    print('col:', col)
+    print(res)
+    jac_u[:, col-3] = np.array(res).transpose()
+    print(jac_u)

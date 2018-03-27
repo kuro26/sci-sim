@@ -76,7 +76,7 @@ def event_top(_, yin):
 # ------------------------------------------------
 def sim_cycle(pairs):
     h0, vx0, vy0, alpha, beta, ks1, ks2 = pairs
-    m, g, l0 = [30.0, -9.8, 1.0]
+    m, g, l0 = [20.0, -9.8, 1.0]
     t_span = (0, 2)
     t_eval = np.linspace(0, 2, 500)
     options = {'rtol': 1e-9, 'atol': 1e-12}

@@ -20,7 +20,7 @@ def control_para_calculation(des_vel, x_now):
         print("Error, input wrong velocity!")
         return
     # 2.规范化期望速度并找到对应的pair
-    m_idx = np.fabs(vel_list - 4.25).argmin()
+    m_idx = np.fabs(vel_list - des_vel).argmin()
     m_pair = m_table[m_idx]
 
     # 3.计算梯度
