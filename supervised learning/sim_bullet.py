@@ -17,6 +17,7 @@ mode = p.VELOCITY_CONTROL
 # p.setJointMotorControl2(RobotId, 0, mode, targetVelocity=1, force=100)
 # p.setJointMotorControl2(RobotId, 1, mode, targetVelocity=1, force=100)
 # p.setJointMotorControl2(RobotId, 4, mode, targetVelocity=1, force=100)
+p.calculateMassMatrix()
 
 # 仿真循环
 for i in range(600):
