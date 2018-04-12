@@ -19,19 +19,19 @@ P = O.locatenew('P', l * A.x)            # 设置P点为从O点开始，沿A坐�
 R = P.locatenew('R', l * B.x)
 
 O.set_vel(N, 0)
-P.v2pt_theory(O, N, A)
+P.v2pt_theory(O, N, A)        # P和O点固定在A坐标系，基于N坐标系变化
 R.v2pt_theory(P, N, B)
 
-ParP = Particle('ParP', P, m)
+ParP = Particle('ParP', P, m)     # 设置对应点的质量
 ParR = Particle('ParR', R, m)
 
 kd = [q1d - u1, q2d - u2]
-FL = [(P, m * g * N.x), (R, m * g * N.x)]
+FL = [(P, m * g * N.x), (R, m * g * N.x)]      # 重力等施加在P，R点的外力
 BL = [ParP, ParR]
 
 KM = KanesMethod(N, q_ind=[q1, q2], u_ind=[u1, u2], kd_eqs=kd)
 
-(fr, frstar) = KM.kanes_equations(FL, BL)
+(fr, frstar) = KM.kanes_equations(BL, FL)
 kdd = KM.kindiffdict()
 mm = KM.mass_matrix_full
 fo = KM.forcing_full
