@@ -1,3 +1,7 @@
+# --------------------------------------
+# 本例结构
+# BaseY->--------Y->-----------Y->
+# ---------------------------------------
 import numpy as np
 import rbdl
 
@@ -35,6 +39,7 @@ point_local = np.array([1., 2., 3.])     # 一个局部坐标值
 point_base = rbdl.CalcBodyToBaseCoordinates(model, q, body_3, point_local)    # 在body3的局部坐标系下的的点在全局中的坐标
 point_local_2 = rbdl.CalcBaseToBodyCoordinates(model, q, body_3, point_base)  # 反过来
 # 前向动力学
+# 这个破模型当然计算得到的加速度全都是零了，真是傻了
 rbdl.ForwardDynamics(model, q, qdot, tau, qddot)
 print("qddot = " + str(qddot.transpose()))
 
@@ -43,4 +48,3 @@ G = np.zeros([3, model.qdot_size])
 rbdl.CalcPointJacobian(model, q, body_3, point_local, G)
 
 print("G = \n" + str(G))
-/

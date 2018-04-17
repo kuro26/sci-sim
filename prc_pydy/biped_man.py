@@ -3,7 +3,8 @@ import sympy as sym
 import sympy.physics.mechanics as me
 
 
-def biped_model():
+# 左脚着地时系统模型
+def biped_model_left():
     # 定义状态变量
     alpha, beta, gamma = me.dynamicsymbols('alp beta gama')     # 与地面接触点状态
     dalpha, dbeta, dgamma = me.dynamicsymbols('alp beta gama', 1)
@@ -14,7 +15,12 @@ def biped_model():
     # 定义常量
 
     # 定义坐标系
-    ground = me.ReferenceFrame('ground')                 # 左右脚区别在谁与地面绑定
+    ground = me.ReferenceFrame('ground')
     axis_1 = ground.orientnew('Axis1', 'Body', [alpha, beta, gamma], '123')
-    axis_2 =
+    axis_2 = axis_1.orientnew('Axis2', 'Axis', [lj2, axis_1.y])
+
+    # 定义点
+    ori = me.Point('ori')
+
+
 
