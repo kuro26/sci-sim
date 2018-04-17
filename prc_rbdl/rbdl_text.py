@@ -48,3 +48,4 @@ G = np.zeros([3, model.qdot_size])
 rbdl.CalcPointJacobian(model, q, body_3, point_local, G)
 
 print("G = \n" + str(G))
+

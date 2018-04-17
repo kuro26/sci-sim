@@ -8,6 +8,7 @@
 # ---------------------------------------
 import numpy as np
 import rbdl
+import matplotlib.pyplot as plt
 
 
 l1, l2, l3 = [0.5, 0.5, 0.6]
@@ -20,9 +21,9 @@ model.gravity = np.array([0.0, 0.0, -9.81])
 ixx = m1 * l1 * l1 / 12
 izz = ixx
 b1 = rbdl.Body.fromMassComInertia(
-    double_mass=m1,      # 这里不太能理解，pyx文件中是没有cls_type参数的
-    ndarray_com=np.array([0., 0., 0.]),
-    ndarray_inertia=np.diag([ixx, 0.0, izz]))
+    m1,
+    np.array([0., 0., 0.]),
+    np.diag([ixx, 0.0, izz]))
 ixx = m2 * l2 * l2 / 12
 izz = ixx
 b2 = rbdl.Body.fromMassComInertia(
@@ -43,15 +44,28 @@ joint_planar_x = rbdl.Joint.fromJointAxes(planar_float_type)
 # 创建关节，x轴转动约束(j1, j2)
 joint_rot_x = rbdl.Joint.fromJointType("JointTypeRevoluteX")
 # 3. 向模型中添加body
-# 机体初始位置
 trans = rbdl.SpatialTransform()
-trans.r = np.array([0.0, 1.0, 1.0])
-base = model.AppendBody(trans, joint_planar_x, b1)
-trans.r = np.array([])
+trans.r = np.array([0.0, 1.0, 1.0])        # floating base位置
+b_base = model.AppendBody(trans, joint_planar_x, b1)
+trans.r = np.array([0.0, -l2/2, 0.0])      # 关节1相对fb坐标系位置
+b_link1 = model.AddBody(b_base, trans, joint_rot_x, b1)
+trans.r = np.array([0.0, l2/2, 0.0])       # 关节2相对fb坐标系位置
+b_link3 = model.AddBody(b_base, trans, joint_rot_x, b3)
 
+constrain_set_l1 = rbdl.ConstraintSet()
+c_point = np.array([0.0, l1, 0.0])
+# 话说这个名字参数居然不是可以不要的，虽然没什么用
+constrain_set_l1.AddConstraint(b_link1, c_point, np.array([0., 1., 0.]), 'ground_y'.encode('utf-8'))
+constrain_set_l1.AddConstraint(b_link1, c_point, np.array([0., 0., 1.]), 'ground_z'.encode('utf-8'))
+constrain_set_l1.Bind(model)
 
-
-
+# 基于该模型仿真测试一下
+q = np.zeros(model.q_size)
+qd = np.zeros(model.qdot_size)
+qdd = np.zeros(model.qdot_size)
+tau = np.zeros(model.qdot_size)
+# 思考：基于约束的仿真出来约束点是否会变化，最佳的仿真效果还是从当前出发
+# 不过：我们不用这个来仿真，用来只做当前的控制，是没有问题的
 
 
 
