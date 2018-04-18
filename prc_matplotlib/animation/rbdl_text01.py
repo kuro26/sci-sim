@@ -68,43 +68,8 @@ qdd0 = np.zeros(model.qdot_size)
 tau = np.zeros(model.qdot_size)
 # 思考：基于约束的仿真出来约束点是否会变化，最佳的仿真效果还是从当前出发
 # 不过：我们不用这个来仿真，用来只做当前的控制，是没有问题的
-t_cycle = 0.004
 
-
-# 产生绘图数据
-def data_gen(q=q0[:], qd=qd0[:], qdd=qdd0[:]):
-    t_max = 3
-    for i in range(int(t_max/t_cycle)):
-        # 从源文件知道，这个动力学计算是不包括约束的，所以用这个计算约束没用
-        rbdl.ForwardDynamics(model, q, qd, tau, qdd)    # 用正运动学计算加速度
-        qd = qd + qdd * t_cycle
-        q = q + qd * t_cycle
-        yield q
-
-
-def run(data):
-    q = data
-    j0_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link1, np.array([0., l1, 0.]))
-    j1_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link1, np.array([0., 0., 0.]))
-    j2_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link3, np.array([0., 0., 0.]))
-    j3_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link3, np.array([0., l3, 0.]))
-
-    ax.plot([j0_p[1], j1_p[1]], [j0_p[2], j1_p[2]], 'r')
-    ax.plot([j1_p[1], j2_p[1]], [j1_p[2], j2_p[2]], 'b')
-    ax.plot([j2_p[1], j3_p[1]], [j2_p[2], j3_p[2]], 'g')
-
-
-def init():
-    ax.set_ylim(-2, 2)
-    ax.set_xlim(-2, 2)
-
-
-fig, ax = plt.subplots()
-
-ax.grid()
-
-ani = animation.FuncAnimation(fig, run, data_gen, blit=False, interval=10, repeat=False, init_func=init)
-plt.show()
+# 现在rbdl的python封装没有计算约束参数那部分的
 
 
 
