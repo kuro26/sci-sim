@@ -5,6 +5,7 @@
 #      ↓         / b2
 #    j0   b1    /
 # Base⊙-------⊙ j1
+# 完成：2018年4月20日
 # ---------------------------------------
 import numpy as np
 import rbdl
@@ -23,7 +24,7 @@ ixx = m1 * l1 * l1 / 12
 izz = ixx
 b1 = rbdl.Body.fromMassComInertia(
     m1,
-    np.array([0., 0., 0.]),
+    np.array([0., l1/2, 0.]),
     np.diag([ixx, 0.0, izz]))
 ixx = m2 * l2 * l2 / 12
 izz = ixx
@@ -31,10 +32,10 @@ b2 = rbdl.Body.fromMassComInertia(
     m2, np.array([0., 0., 0.]),
     np.diag([ixx, 0.0, izz])
 )
-ixx = m3 * l3 * l3 / 13
+ixx = m3 * l3 * l3 / 12
 izz = ixx
 b3 = rbdl.Body.fromMassComInertia(
-    m3, np.array([0., 0., 0.]),
+    m3, np.array([0., l3/2, 0.]),
     np.diag([ixx, 0.0, izz])
 )
 # 2. 创建关节，平面浮动平台约束(q1, q2, q3)
@@ -68,15 +69,15 @@ qdd0 = np.zeros(model.qdot_size)
 tau = np.zeros(model.qdot_size)
 # 思考：基于约束的仿真出来约束点是否会变化，最佳的仿真效果还是从当前出发
 # 不过：我们不用这个来仿真，用来只做当前的控制，是没有问题的
-t_cycle = 0.004
+t_cycle = 0.002
 
 
 # 产生绘图数据
 def data_gen(q=q0[:], qd=qd0[:], qdd=qdd0[:]):
-    t_max = 3
+    t_max = 2
     for i in range(int(t_max/t_cycle)):
         # 从源文件知道，这个动力学计算是不包括约束的，所以用这个计算约束没用
-        # rbdl.ForwardDynamics(model, q, qd, tau, qdd)    # 用正运动学计算加速度
+        # 改了一些封装之后可用了
         rbdl.CalcContactSystemVariables(model, q, qd, tau, constrain_set_l1)
         H = constrain_set_l1.get_H()
         G = constrain_set_l1.get_G()
@@ -91,6 +92,7 @@ def data_gen(q=q0[:], qd=qd0[:], qdd=qdd0[:]):
         b[5:7, 0] = gamma.transpose()
         res = np.dot(np.linalg.inv(A), b)
         qdd = res[0:5, 0].transpose()
+        # 这种简单的积分是一定会产生漂移的，约束点的漂移简直可怕
         qd = qd + qdd * t_cycle
         q = q + qd * t_cycle
         yield q
@@ -98,30 +100,33 @@ def data_gen(q=q0[:], qd=qd0[:], qdd=qdd0[:]):
 
 def run(data):
     q = data
+    # print(q)
     j0_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link1, np.array([0., l1, 0.]))
     j1_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link1, np.array([0., 0., 0.]))
     j2_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link3, np.array([0., 0., 0.]))
     j3_p = rbdl.CalcBodyToBaseCoordinates(model, q, b_link3, np.array([0., l3, 0.]))
 
-    ax.plot([j0_p[1], j1_p[1]], [j0_p[2], j1_p[2]], 'r')
-    ax.plot([j1_p[1], j2_p[1]], [j1_p[2], j2_p[2]], 'b')
-    ax.plot([j2_p[1], j3_p[1]], [j2_p[2], j3_p[2]], 'g')
+    link1.set_data([j0_p[1], j1_p[1]], [j0_p[2], j1_p[2]])
+    link2.set_data([j1_p[1], j2_p[1]], [j1_p[2], j2_p[2]])
+    link3.set_data([j2_p[1], j3_p[1]], [j2_p[2], j3_p[2]])
+
 
 
 def init():
     ax.set_ylim(-2, 2)
-    ax.set_xlim(0, 4)
+    ax.set_xlim(-0, 4)
 
 
 fig, ax = plt.subplots()
-
+link1, = ax.plot([], [], 'b', lw=2)
+link2, = ax.plot([], [], 'r', lw=2)
+link3, = ax.plot([], [], 'g', lw=2)
 ax.grid()
 
 ani = animation.FuncAnimation(fig, run, data_gen, blit=False, interval=10, repeat=False, init_func=init)
 plt.show()
 
-
-
-
-
-
+# 测试完毕
+# 1. 注意定义body时设定的基坐标，在rbdl_test中是没改过的，可以试试
+# 2. 在动力学文件中的inversedynamic是不包含约束的
+# 3. 简单的积分漂移真的大
