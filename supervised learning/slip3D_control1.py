@@ -1,7 +1,7 @@
 # 控制方法来自论文：
 # 《High-Speed Humanoid Running Through Control with a 3D-SLIP Model》
 
-import slip3D_ex
+from . import slip3D_ex
 import pandas as pd
 import numpy as np
 
@@ -16,7 +16,7 @@ def get_next_apex_status(pair):
 
 
 # 对单个pair计算雅可比矩阵
-def conrol_jac_calculation(pair):
+def control_jac_calculation(pair):
     m_apex = get_next_apex_status(pair)
     # 计算 jac x, u
     jac_combine = np.zeros(shape=(3, 7))
@@ -43,10 +43,10 @@ def conrol_jac_calculation(pair):
 def control_jac_dic_generate():
     m_table = pd.read_csv('./data/stable_pair.csv', header=None).values
     table_len = m_table.shape[0]
-    dic = {}
+    dic = {}               # 用速度来索引控制对
     for i in range(table_len):
         pair = m_table[i]
-        jac = conrol_jac_calculation(pair)
+        jac = control_jac_calculation(pair)
         dic[m_table[i, 1]] = jac
     return dic
 

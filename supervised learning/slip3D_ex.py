@@ -75,7 +75,7 @@ def event_top(_, yin):
 # 后续使用仿真轨迹进行实际机器人的规划设计或者绘图都OK
 # ------------------------------------------------
 def sim_cycle(pairs):
-    h0, vx0, vy0, alpha, beta, ks1, ks2 = pairs
+    h0, vx0, vy0, alpha, beta, ks1, ks2, _ = pairs
     m, g, l0 = [20.0, -9.8, 1.0]
     t_span = (0, 2)
     t_eval = np.linspace(0, 2, 500)
@@ -155,3 +155,34 @@ def sim_cycle_test(pairs):
     # pd.DataFrame(sol2.y).to_csv('data/sol2.csv')
     # pd.DataFrame(sol3.y).to_csv('data/sol3.csv')
     # pd.DataFrame(sol4.y).to_csv('data/sol4.csv')
+
+
+# 仿真一遍获得下一顶点状态
+def get_next_apex_status(pair):
+    sol1, sol2, sol3, sol4, foot_point = sim_cycle(pair)
+    return sol4.y[:, -1][2:5]
+
+
+# 对单个pair计算雅可比矩阵
+# pair - <高度 速度x 速度>
+def control_jac_calculation(pair):
+    m_apex = get_next_apex_status(pair)
+    # 计算 jac x, u
+    jac_combine = np.zeros(shape=(3, 7))
+    for col in range(7):
+        dm_pair = np.array(pair)
+        if dm_pair[col] < 10:              # 数值计算delta的选取
+            dx = 0.001
+        else:
+            dx = dm_pair[col] * 0.001
+        dm_pair[col] = dm_pair[col] + dx
+        dm_apex = get_next_apex_status(dm_pair)
+        res = (dm_apex - m_apex) / dx
+        jac_combine[:, col] = np.array(res).transpose()
+    jac_x = jac_combine[:, 0:3]
+    jac_u = jac_combine[:, 3:8]
+    # 计算 dot(inv(Ju), Jx)
+    jac_u_2 = jac_u[:, 0:3]
+    jac_u_2[:, 2] = jac_u_2[:, 2] - jac_u[:, -1]
+    j_total = np.dot(np.linalg.inv(jac_u_2), jac_x)
+    return j_total
