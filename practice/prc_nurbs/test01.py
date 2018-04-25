@@ -9,24 +9,24 @@ import numpy as np
 # 一阶导数，二阶导数测试
 def nurbs_test():
     curve = BSpline.Curve()
-    curve.ctrlpts = ((3.0,), (1.0, ), (3.0, ), (2.0, ), (5.0, ))
-    curve.delta = 0.01
-    curve.degree = 4                # degree应该小于控制点数量
+    curve.ctrlpts = ((3.0,), (1.0, ), (3.0, ), (2.0, ), (5.0, ))      # 控制点
+    curve.delta = 0.01                                                # 数据间隔
+    curve.degree = 4                                                  # degree应该小于控制点数量
     # 自动计算knot point
     curve.knotvector = utilities.generate_knot_vector(curve.degree, len(curve.ctrlpts))
-    curve.evaluate()
-    pt_y = []
+    curve.evaluate()                                                  # 计算曲线
+    pt_y = []                       # y值
     pt_x = np.linspace(0, 1, 101)
-    dpt_y = []
-    ddpt_y = []
+    dpt_y = []                      # y一阶导数
+    ddpt_y = []                     # y二阶导数
     for pt in pt_x:
-        tmp = curve.derivatives(pt, order=2)
+        tmp = curve.derivatives(pt, order=2)   # 0，1，2阶导数全部计算
         pt_y.append(tmp[0][0])
         dpt_y.append(tmp[1][0])
         ddpt_y.append(tmp[2][0])
-    ctrl_x = np.linspace(0, 1, 5)
+    ctrl_x = np.linspace(0, 1, 5)              # 控制点
     ctrl_y = []
-    for item in curve.ctrlpts:
+    for item in curve.ctrlpts:                 #
         ctrl_y.append(item[0])
     plt.plot(pt_x, pt_y, 'b-')
     plt.plot(ctrl_x, ctrl_y, 'r*')
@@ -46,3 +46,27 @@ def nurbs_test():
     plt.plot(pt_x_dis, ddpt_y_dis, '+r')
     plt.plot(pt_x, ddpt_y, '-b')
     plt.show()
+
+
+def swing_leg_planning():
+    curve = BSpline.Curve()
+    curve.ctrlpts = ((-0.2, 0), (-0.3, -0.03), (0., 0.3), (0.3, 0.), (0.2, 0.))  # 控制点
+    curve.delta = 0.01  # 数据间隔
+    curve.degree = 4  # degree应该小于控制点数量
+    curve.knotvector = utilities.generate_knot_vector(curve.degree, len(curve.ctrlpts))
+    curve.evaluate()
+    x = []
+    y = []
+    t_list = np.linspace(0, 1, 101)
+    for t in t_list:
+        tmp = curve.derivatives(t, order=0)
+        x.append(tmp[0][0])
+        y.append(tmp[0][1])
+    plt.plot(x, y, '+')
+    plt.xlim((-0.3, 0.3))
+    plt.ylim((-0.1, 0.5))
+    plt.grid()
+    plt.show()
+
+
+swing_leg_planning()
