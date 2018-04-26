@@ -1,7 +1,7 @@
 # 控制方法来自论文：
 # 《High-Speed Humanoid Running Through Control with a 3D-SLIP Model》
 
-from . import slip3D_ex
+from .. import slip3D_ex
 import pandas as pd
 import numpy as np
 
@@ -69,9 +69,7 @@ def control_para_calculation(des_vel, x_now, dic):
     delta_x = x_now - m_pair[0: 3]         # 计算当前状态对稳态的delta x
     jac = dic[m_pair[1]]
     delta_u = np.dot(jac, delta_x.transpose())
-    delta_u_out = np.array(shape=(4,))
+    delta_u_out = np.array((4,))
     delta_u_out[0:3] = delta_u
     delta_u_out[-1] += -delta_u[-1]
     return m_pair, delta_u_out
-
-

@@ -48,6 +48,7 @@ def nurbs_test():
     plt.show()
 
 
+# 该系统的构造不包含边界上的速度，所以应用受限，因此，后面还是需要发展自己的nurbs曲线，带边界条件的
 def swing_leg_planning():
     curve = BSpline.Curve()
     curve.ctrlpts = ((-0.2, 0), (-0.3, -0.03), (0., 0.3), (0.3, 0.), (0.2, 0.))  # 控制点
@@ -56,17 +57,22 @@ def swing_leg_planning():
     curve.knotvector = utilities.generate_knot_vector(curve.degree, len(curve.ctrlpts))
     curve.evaluate()
     x = []
+    dx = []
     y = []
+    dy = []
     t_list = np.linspace(0, 1, 101)
     for t in t_list:
-        tmp = curve.derivatives(t, order=0)
+        tmp = curve.derivatives(t, order=1)
         x.append(tmp[0][0])
+        dx.append(tmp[1][0])
         y.append(tmp[0][1])
-    plt.plot(x, y, '+')
+        dy.append(tmp[1][1])
+    plt.plot(x, y)
     plt.xlim((-0.3, 0.3))
     plt.ylim((-0.1, 0.5))
     plt.grid()
     plt.show()
+
 
 
 swing_leg_planning()

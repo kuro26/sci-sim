@@ -4,6 +4,8 @@ import pybullet_data
 import pandas as pd
 import numpy as np
 from . import slip3D_ex
+from geomdl import BSpline
+from geomdl import utilities
 
 g = 9.8
 sim_cycle = 0.01
@@ -19,10 +21,13 @@ class BipedController:
         self.dic_vel_time = {}        # 速度索引半周期
         self.pair_table = np.array([])
         # 本周期相关变量
-        self.this_x = []              # 起始顶点状态
-        self.this_rv = 0              # 参考速度
-        self.this_pair = []           # 控制对
-        self.this_du = []             # 无系数du
+        self.this_x = np.array([])     # 起始顶点状态
+        self.this_rv = 0               # 参考速度
+        self.this_pair = []            # 控制对
+        self.this_du = np.array([])    # 无系数du
+        self.this_T_half = 0           # 本半周期时间间隔
+        self.this_t = 0                # 本周期时间
+        self.
 
     # ----------导入表格，生成控制雅可比矩阵----------
     def load_table(self, pair_path):
@@ -53,6 +58,10 @@ class BipedController:
         delta_u_out[-1] += -delta_u[-1]      # 冗余量约束设计得到
         self.this_pair = m_pair
         self.this_du = delta_u_out
+
+    def swing_planning(self, t):
+        curve = BSpline.Curve()
+
 
     # -----------输出[tau1 ……tau5]的控制量-----------
     def robot_control(self):
