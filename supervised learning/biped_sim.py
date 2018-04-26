@@ -10,10 +10,14 @@ from geomdl import utilities
 g = 9.8
 sim_cycle = 0.01
 
-
-# 奔跑控制总程序
+# -------------------------------------------------------
+# 类：奔跑运动控制器
+#                     x方向与地面夹角
+# pairs <h0, vx0, vy0, alpha, beta, ks1, ks2>
+# -------------------------------------------------------
 class BipedController:
     def __init__(self, robot_id):
+        self.l0 = 1.0                 # 腿长
         self.status = 'air'
         self.contact_status = [0, 0]
         self.robot_id = robot_id
@@ -27,7 +31,6 @@ class BipedController:
         self.this_du = np.array([])    # 无系数du
         self.this_T_half = 0           # 本半周期时间间隔
         self.this_t = 0                # 本周期时间
-        self.
 
     # ----------导入表格，生成控制雅可比矩阵----------
     def load_table(self, pair_path):
@@ -59,8 +62,18 @@ class BipedController:
         self.this_pair = m_pair
         self.this_du = delta_u_out
 
+    # t为本周期时间
+    # 输出(q, dq)
     def swing_planning(self, t):
         curve = BSpline.Curve()
+        # 触地竖直速度估计，只在local用到的变量就放在local
+        h0, vx0, vy0, alpha, beta, ks1, ks2 = self.this_pair[0:7]
+        delta_h = h0 - self.l0 * np.sin(alpha)
+        vz_contact = np.sqrt(2 * delta_h * g)
+        vx_contact = vx0
+        a_begin = np.array([vx_contact, vz_contact])/
+
+
 
 
     # -----------输出[tau1 ……tau5]的控制量-----------

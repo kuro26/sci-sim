@@ -75,7 +75,7 @@ def event_top(_, yin):
 # 后续使用仿真轨迹进行实际机器人的规划设计或者绘图都OK
 # ------------------------------------------------
 def sim_cycle(pairs):
-    h0, vx0, vy0, alpha, beta, ks1, ks2, _ = pairs
+    h0, vx0, vy0, alpha, beta, ks1, ks2 = pairs[0:7]
     m, g, l0 = [20.0, -9.8, 1.0]
     t_span = (0, 2)
     t_eval = np.linspace(0, 2, 500)
