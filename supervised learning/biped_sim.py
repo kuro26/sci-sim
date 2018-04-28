@@ -3,9 +3,11 @@ import time
 import pybullet_data
 import pandas as pd
 import numpy as np
-from . import slip3D_ex
 from geomdl import BSpline
 from geomdl import utilities
+
+from .utils import *
+from . import slip3D_ex
 
 g = 9.8
 sim_cycle = 0.01
@@ -31,6 +33,7 @@ class BipedController:
         self.this_du = np.array([])    # 无系数du
         self.this_T_half = 0           # 本半周期时间间隔
         self.this_t = 0                # 本周期时间
+        self.this_curve = BSpline.Curve()
 
     # ----------导入表格，生成控制雅可比矩阵----------
     def load_table(self, pair_path):
@@ -62,18 +65,42 @@ class BipedController:
         self.this_pair = m_pair
         self.this_du = delta_u_out
 
-    # t为本周期时间
-    # 输出(q, dq)
-    def swing_planning(self, t):
-        curve = BSpline.Curve()
+    # 世界坐标系转化到关节坐标系
+    def world2joint(self, p_world):
+        b_po = p.getBasePositionAndOrientation(self.robot_id)
+        alpha, beta, gamma = p.getEulerFromQuaternion(b_po[1])        # 机体欧拉角表示
+
+
+
+    # -----------------------------------------
+    # 函数： 根据控制pair，创建曲线表达
+    # 将前置条件作为参数传入，保证理解
+    # -----------------------------------------
+    def create_swing_curve(self, pair):
         # 触地竖直速度估计，只在local用到的变量就放在local
-        h0, vx0, vy0, alpha, beta, ks1, ks2 = self.this_pair[0:7]
+        h0, vx0, vy0, alpha, beta, ks1, ks2 = pair[0:7]
         delta_h = h0 - self.l0 * np.sin(alpha)
         vz_contact = np.sqrt(2 * delta_h * g)
         vx_contact = vx0
-        a_begin = np.array([vx_contact, vz_contact])/
+        tmp = np.sqrt(vx_contact*vx_contact + vz_contact * vz_contact)
+        a_begin = np.array([-vx_contact, -vz_contact])/tmp        # 初始速度向量
+        a_end = np.array([-vx_contact, vz_contact])/tmp
+        p1 = (-self.l0 * np.cos(alpha), 0.0)                      # 初始点，以原点为坐标系
+        p2 = (p1[0] + a_begin[0]*0.1, p1[1] + a_begin[1]*0.1)
+        p3 = (0, 0.3)
+        p5 = (self.l0 * np.cos(alpha), 0.0)
+        p4 = (p5[0] + a_end[0]*0.1, p5[1] + a_end[1]*0.1)
+        self.this_curve.ctrlpts = (p1, p2, p3, p4, p5)
+        self.this_curve.delta = 0.01
+        self.this_curve.degree = 4
+        self.this_curve.knotvector = utilities.generate_knot_vector(4, len(self.this_curve.ctrlpts))
+        self.this_curve.evaluate()
 
 
+    # -----------------------------------------
+    # 函数： 根据时间t，获得当前的腿部规划在世界坐标系下的状态
+    # -----------------------------------------
+    def get_swing_planning(self):
 
 
     # -----------输出[tau1 ……tau5]的控制量-----------

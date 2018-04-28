@@ -4,24 +4,24 @@ import math
 
 
 def rotate_x(alpha):
-    ca = math.cos(alpha)
-    sa = math.sin(alpha)
+    ca = np.cos(alpha)
+    sa = np.sin(alpha)
     return np.array([[1.0, 0.0, 0.0],
                      [0.0, ca,  -sa],
                      [0.0, sa,  ca]])
 
 
 def rotate_y(beta):
-    cb = math.cos(beta)
-    sb = math.sin(beta)
+    cb = np.cos(beta)
+    sb = np.sin(beta)
     return np.array([[cb,  0.0, sb],
                      [0.0, 1.0, 0.0],
                      [-sb, 0.0, cb]])
 
 
 def rotate_z(gamma):
-    cg = math.cos(gamma)
-    sg = math.sin(gamma)
+    cg = np.cos(gamma)
+    sg = np.sin(gamma)
     return np.array([[cg,  -sg, 0.0],
                      [sg,   cg, 0.0],
                      [0.0, 0.0, 1.0]])
