@@ -6,7 +6,7 @@ import numpy as np
 from geomdl import BSpline
 from geomdl import utilities
 
-from .utils import *
+from .tools.utils import *
 from . import slip3D_ex
 
 g = 9.8
@@ -65,10 +65,32 @@ class BipedController:
         self.this_pair = m_pair
         self.this_du = delta_u_out
 
-    # 世界坐标系转化到关节坐标系
-    def world2joint(self, p_world):
+    # 伪世界坐标系(位置固定在body上，)转化到关节坐标系
+    def coord_fake_world2joint(self, p_world, leg):
+        assert p_world.shape == (3, 1)
+        tmp = p_world.tolist()
+        tmp.append([1])
+        pw_ext = np.array(tmp)
         b_po = p.getBasePositionAndOrientation(self.robot_id)
         alpha, beta, gamma = p.getEulerFromQuaternion(b_po[1])        # 机体欧拉角表示
+        if leg == 'left':
+            dy = 0.12
+        else:
+            dy = -0.12
+        t1 = rotate_x(alpha)*rotate_y(beta)*trans_xyz(0, dy, -0.2)
+        p_in1 = np.linalg.inv(t1).dot(pw_ext)
+        ang_a = np.arctan2(p_in1[1], abs(p_in1[2]))
+        t2 = rotate_x(ang_a)
+        p_in2 = np.linalg.inv(t2).dot(p_in1)
+        y, z = p_in2[1], p_in2[2]
+        tmp1 = y*y + z*z
+        tmp2 = np.sqrt(-tmp1*(tmp1-1))
+        ang_b = -2 * np.arctan((y + (y*y*tmp2)/tmp1 + (z*z*tmp2)/tmp1)/(tmp1 - z))
+        ang_c = 2 * np.arctan(tmp2/tmp1)
+        # ang_b = 2 * np.arctan((-y + (y*y*tmp2)/tmp1 + (z*z*tmp2)/tmp1)/(tmp1 - z))
+        # ang_c = -2 * np.arctan(tmp2/tmp1)
+        return [ang_a, ang_b, ang_c]
+
 
 
 
@@ -100,7 +122,7 @@ class BipedController:
     # -----------------------------------------
     # 函数： 根据时间t，获得当前的腿部规划在世界坐标系下的状态
     # -----------------------------------------
-    def get_swing_planning(self):
+    # def get_swing_planning(self):
 
 
     # -----------输出[tau1 ……tau5]的控制量-----------
@@ -122,7 +144,6 @@ class BipedController:
                 self.this_x = [h0, vel[0][0], vel[0][1]]
                 self.control_para_calculation()         # 计算控制参数
             # 计算当前腿部规划点
-
 
 
 
