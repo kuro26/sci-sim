@@ -26,7 +26,8 @@ class BipedController:
         self.dic_vel_jac = {}         # 由速度索引的控制雅可比矩阵
         self.dic_vel_time = {}        # 速度索引半周期
         self.pair_table = np.array([])
-        # 本周期相关变量
+
+        # -----------本周期相关变量------------------
         self.this_x = np.array([])     # 起始顶点状态
         self.this_rv = 0               # 参考速度
         self.this_pair = []            # 控制对
@@ -65,7 +66,10 @@ class BipedController:
         self.this_pair = m_pair
         self.this_du = delta_u_out
 
+    # -----------------------------------------
+    # 逆运动学：
     # 伪世界坐标系(位置固定在body上，)转化到关节坐标系
+    # -----------------------------------------
     def coord_fake_world2joint(self, p_world, leg):
         assert p_world.shape == (3, 1)
         tmp = p_world.tolist()
@@ -77,25 +81,36 @@ class BipedController:
             dy = 0.12
         else:
             dy = -0.12
-        t1 = rotate_x(alpha)*rotate_y(beta)*trans_xyz(0, dy, -0.2)
+        t1 = rotate_x(alpha).dot(rotate_y(beta).dot(trans_xyz(0, dy, -0.2)))
         p_in1 = np.linalg.inv(t1).dot(pw_ext)
         ang_a = np.arctan2(p_in1[1], abs(p_in1[2]))
         t2 = rotate_x(ang_a)
         p_in2 = np.linalg.inv(t2).dot(p_in1)
-        y, z = p_in2[1], p_in2[2]
-        tmp1 = y*y + z*z
-        tmp2 = np.sqrt(-tmp1*(tmp1-1))
-        ang_b = -2 * np.arctan((y + (y*y*tmp2)/tmp1 + (z*z*tmp2)/tmp1)/(tmp1 - z))
-        ang_c = 2 * np.arctan(tmp2/tmp1)
-        # ang_b = 2 * np.arctan((-y + (y*y*tmp2)/tmp1 + (z*z*tmp2)/tmp1)/(tmp1 - z))
+        x2, z2 = p_in2[0], p_in2[2]
+        # print(p_in2)
+        tmp1 = x2 * x2 + z2 * z2
+        tmp2 = np.sqrt(-tmp1 * (tmp1 - 1))
+        ang_b = -2 * np.arctan((x2 + (x2 * x2 * tmp2) / tmp1 + (z2 * z2 * tmp2) / tmp1) / (tmp1 - z2))
+        ang_c = 2 * np.arctan(tmp2 / tmp1)
+        # ang_b = 2 * np.arctan((-x2 + (x2*x2*tmp2)/tmp1 + (z2*z2*tmp2)/tmp1)/(tmp1 - z2))
         # ang_c = -2 * np.arctan(tmp2/tmp1)
         return [ang_a, ang_b, ang_c]
 
-
-
+    # -----------------------------------------
+    # 足端位置控制
+    # 基于三关节角度的足端位置控制
+    # -----------------------------------------
+    def position_control_leg(self, angle, leg):
+        mode = p.POSITION_CONTROL
+        id = self.robot_id
+        j_id = [4, 5, 6]
+        if leg == 'left':
+            j_id = [0, 1, 2]
+        for i in range(3):
+            p.setJointMotorControl2(id, j_id[i], mode, targetPosition=angle[i])
 
     # -----------------------------------------
-    # 函数： 根据控制pair，创建曲线表达
+    # 函数： 根据控制pair，创建标准曲线表达
     # 将前置条件作为参数传入，保证理解
     # -----------------------------------------
     def create_swing_curve(self, pair):
@@ -106,7 +121,7 @@ class BipedController:
         vx_contact = vx0
         tmp = np.sqrt(vx_contact*vx_contact + vz_contact * vz_contact)
         a_begin = np.array([-vx_contact, -vz_contact])/tmp        # 初始速度向量
-        a_end = np.array([-vx_contact, vz_contact])/tmp
+        a_end = np.array([-vx_contact, vz_contact])/
         p1 = (-self.l0 * np.cos(alpha), 0.0)                      # 初始点，以原点为坐标系
         p2 = (p1[0] + a_begin[0]*0.1, p1[1] + a_begin[1]*0.1)
         p3 = (0, 0.3)
@@ -120,9 +135,12 @@ class BipedController:
 
 
     # -----------------------------------------
-    # 函数： 根据时间t，获得当前的腿部规划在世界坐标系下的状态
+    # 函数：获取标准规划下的此时状态
+    # 初始状态和中间时刻
+    # 此时状态 <足端位置， 足端速度>
     # -----------------------------------------
-    # def get_swing_planning(self):
+    def get_swing_planning(self):
+
 
 
     # -----------输出[tau1 ……tau5]的控制量-----------
