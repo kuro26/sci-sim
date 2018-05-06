@@ -12,6 +12,8 @@ from . import slip3D_ex
 g = 9.8
 sim_cycle = 0.01
 
+
+
 # -------------------------------------------------------
 # 类：奔跑运动控制器
 #                     x方向与地面夹角
@@ -32,9 +34,11 @@ class BipedController:
         self.this_rv = 0               # 参考速度
         self.this_pair = []            # 控制对
         self.this_du = np.array([])    # 无系数du
+        self.this_u = np.array([])     # 本周期控制量
         self.this_T_half = 0           # 本半周期时间间隔
         self.this_t = 0                # 本周期时间
-        self.this_curve = BSpline.Curve()
+        self.this_curve_l = BSpline.Curve()      # 左
+        self.this_curve_r = BSpline.Curve()      # 右
 
     # ----------导入表格，生成控制雅可比矩阵----------
     def load_table(self, pair_path):
@@ -47,24 +51,39 @@ class BipedController:
             self.dic_vel_time[pair_table[i, 1]] = pair_table[i, 7]
         self.pair_table = pair_table
 
-    # -----------------计算控制量-------------------
-    def control_para_calculation(self):
-        des_vel = self.this_rv
-        x_now = self.this_x
+    # -----------------------------------------
+    # 计算控制量：
+    # 期望速度-->【pair】-->【控制量】-->落地点
+    # 控制量： 相对于pair中u的偏移方向
+    # -----------------------------------------
+    # 设置控制器的期望速度
+    def set_target_vel(self, target_vel):
+        self.this_rv = target_vel
+
+    # 选择控制器本周期的控制对
+    def choose_pair_from_speed(self):
+        # 1. 从表格中按速度索引得到pair
+        des_vel = self.this_rv  # 获取期望速度
         vel_list = self.pair_table[:, 1]
         if des_vel > vel_list.max() or des_vel < vel_list.min():
             print("Error, input wrong velocity!")
         m_idx = np.fabs(vel_list - des_vel).argmin()
         m_pair = self.pair_table[m_idx]
-        # 计算该状态下的delta控制量
+        self.this_pair = m_pair
+
+    # 计算控制器本周期内的控制参数
+    def calculate_control_param(self):
+        m_pair = self.this_pair
+        x_now = self.this_x                 # 获取当前顶点状态
+        # 1. 计算在标准pair下的控制增量 delta u
         delta_x = x_now - m_pair[0: 3]
         jac = self.dic_vel_jac[m_pair[1]]
         delta_u = np.dot(jac, delta_x.transpose())
         delta_u_out = np.array((4,))
         delta_u_out[0:3] = delta_u
         delta_u_out[-1] += -delta_u[-1]      # 冗余量约束设计得到
-        self.this_pair = m_pair
         self.this_du = delta_u_out
+        # 2. 计算本周期控制量
 
     # -----------------------------------------
     # 逆运动学：
@@ -110,36 +129,53 @@ class BipedController:
             p.setJointMotorControl2(id, j_id[i], mode, targetPosition=angle[i])
 
     # -----------------------------------------
+    # 期望速度-->pair-->控制量-->落地点
+    # -----------------------------------------
+    def pair_related_calculation(self, pair):
+        h0, vx0, vy0, alpha, beta, ks1, ks2 = pair[0:7]
+        #
+
+    # -----------------------------------------
     # 函数： 根据控制pair，创建标准曲线表达
+    # 说明：该函数只生成标准的规划
     # 将前置条件作为参数传入，保证理解
     # -----------------------------------------
-    def create_swing_curve(self, pair):
+    def create_swing_curve(self, pair, leg):
         # 触地竖直速度估计，只在local用到的变量就放在local
         h0, vx0, vy0, alpha, beta, ks1, ks2 = pair[0:7]
+        # 1. 计算着地时刻速度方向
         delta_h = h0 - self.l0 * np.sin(alpha)
         vz_contact = np.sqrt(2 * delta_h * g)
         vx_contact = vx0
         tmp = np.sqrt(vx_contact*vx_contact + vz_contact * vz_contact)
-        a_begin = np.array([-vx_contact, -vz_contact])/tmp        # 初始速度向量
-        a_end = np.array([-vx_contact, vz_contact])/
-        p1 = (-self.l0 * np.cos(alpha), 0.0)                      # 初始点，以原点为坐标系
+        a_begin = np.array([-vx_contact, -vz_contact])/tmp        # 2D-离地时速度单位向量
+        a_end = np.array([-vx_contact, vz_contact])               # 2D-着地时速度单位向量
+        # 2. 计算曲线上的点
+        p1 = (-self.l0 * np.cos(alpha), 0.0)
         p2 = (p1[0] + a_begin[0]*0.1, p1[1] + a_begin[1]*0.1)
         p3 = (0, 0.3)
         p5 = (self.l0 * np.cos(alpha), 0.0)
         p4 = (p5[0] + a_end[0]*0.1, p5[1] + a_end[1]*0.1)
-        self.this_curve.ctrlpts = (p1, p2, p3, p4, p5)
-        self.this_curve.delta = 0.01
-        self.this_curve.degree = 4
-        self.this_curve.knotvector = utilities.generate_knot_vector(4, len(self.this_curve.ctrlpts))
-        self.this_curve.evaluate()
+        # 3. 构造曲线对象（实际上确实只需要一条规划曲线就可以）
+        tmp_curve = BSpline.Curve()
+        tmp_curve.ctrlpts = (p1, p2, p3, p4, p5)
+        tmp_curve.delta = 0.01
+        tmp_curve.degree = 4
+        tmp_curve.knotvector = utilities.generate_knot_vector(4, len(tmp_curve.ctrlpts))
+        tmp_curve.evaluate()
+        # 4. 传递给对应的腿
+        if leg == 'left':
+            self.this_curve_l = tmp_curve
+        else:
+            self.this_curve_r = tmp_curve
 
 
     # -----------------------------------------
-    # 函数：获取标准规划下的此时状态
-    # 初始状态和中间时刻
+    # 函数：仿真开始初始化在空中的状态
+    # 需要参数：命令状态，
     # 此时状态 <足端位置， 足端速度>
     # -----------------------------------------
-    def get_swing_planning(self):
+    def init_swing_planning(self):
 
 
 
