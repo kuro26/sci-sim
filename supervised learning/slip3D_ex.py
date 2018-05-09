@@ -73,10 +73,11 @@ def event_top(_, yin):
 #        改为初始-控制对：pairs = [h0, vx0, vy0, alpha, beta, ks1, ks2]
 # output: 仿真轨迹
 # 后续使用仿真轨迹进行实际机器人的规划设计或者绘图都OK
+# b_para = [20.0, -9.8, 1.0]
 # ------------------------------------------------
-def sim_cycle(pairs):
+def sim_cycle(pairs, b_para):
     h0, vx0, vy0, alpha, beta, ks1, ks2 = pairs[0:7]
-    m, g, l0 = [20.0, -9.8, 1.0]
+    m, g, l0 = b_para
     t_span = (0, 2)
     t_eval = np.linspace(0, 2, 500)
     options = {'rtol': 1e-9, 'atol': 1e-12}
@@ -140,8 +141,9 @@ def sim_cycle(pairs):
 
 
 # 测试：sim_cycle_test([.94, 4.5, 0, 1.1577, 0, 6.05e3, 6.05e3])
-def sim_cycle_test(pairs):
-    sol1, sol2, sol3, sol4, foot_point = sim_cycle(pairs)
+# b_para = [20.0, -9.8, 1.0]
+def sim_cycle_test(pairs, b_para):
+    sol1, sol2, sol3, sol4, foot_point = sim_cycle(pairs, b_para)
     ax = plt.axes(projection='3d')
     ax.plot(sol1.y[0, :], sol1.y[1, :], sol1.y[2, :], 'r')
     ax.plot(sol2.y[0, :], sol2.y[1, :], sol2.y[2, :], 'g')
@@ -158,8 +160,8 @@ def sim_cycle_test(pairs):
 
 
 # 仿真一遍获得下一顶点状态
-def get_next_apex_status(pair):
-    sol1, sol2, sol3, sol4, foot_point = sim_cycle(pair)
+def get_next_apex_status(pair, b_para):
+    sol1, sol2, sol3, sol4, foot_point = sim_cycle(pair, b_para)
     return sol4.y[:, -1][2:5]
 
 
