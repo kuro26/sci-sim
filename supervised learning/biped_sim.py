@@ -6,8 +6,8 @@ import numpy as np
 from geomdl import BSpline
 from geomdl import utilities
 
-from .tools.utils import *
-from . import slip3D_ex
+import tools.utils as utl
+import slip3D_ex
 
 g = 9.8
 sim_cycle = 0.01
@@ -29,7 +29,6 @@ class BipedController:
         # self.dic_air_time = {}        # 速度索引半周期
         # self.dic_sup_time = {}        # 速度索引的支撑时间
         self.pair_table = np.array([])
-        self.is_init = True
         # -----------本周期相关变量------------------
         self.this_x = np.array([])     # 起始顶点状态
         self.des_v = 0                 # 参考速度
@@ -47,6 +46,8 @@ class BipedController:
         self.p_begin = np.array([])
         self.a_end = np.array([])      # 着地点速度方向
         self.p_end = np.array([])
+        self.status_change = True      # 初始默认有一个状态转换
+        self.cycle_cnt = 1             # 半周期计数
 
     # -----------------------------------------
     # 导入表格
@@ -54,14 +55,14 @@ class BipedController:
     # -----------------------------------------
     def load_table(self, pair_path):
         # 1. 读取表格
-        pair_table = pd.read_csv(pair_path, eader=None).values
+        pair_table = pd.read_csv(pair_path, header=None).values
         self.pair_table = pair_table
         # 2. 生成控制雅可比矩阵
         table_len = pair_table.shape[0]
         for idx in range(table_len):
-            pair = pair_table[i]
-            jac = slip3D_ex.control_jac_calculation(pair)
-            self.dic_vel_jac[pair_table[i, 1]] = jac
+            pair = pair_table[idx]
+            jac = slip3D_ex.control_jac_calculation(pair, self.para)
+            self.dic_vel_jac[pair_table[idx, 1]] = jac
             # self.dic_air_time[pair_table[i, 1]] = pair_table[i, 7]
             # self.dic_sup_time[pair_table[i, 1]] = pair_table[i, 8]
 
@@ -77,26 +78,29 @@ class BipedController:
 
     # 选择控制器本周期的控制【pair】以及其他在table中的参数
     def choose_pair_from_speed(self):
-        # 1. 从表格中按速度索引得到pair
+        # 0. 前提：table和期望速度
         des_vel = self.des_v  # 获取期望速度
         vel_list = self.pair_table[:, 1]
+        # 1. 根据速度从table中获取pair
         if des_vel > vel_list.max() or des_vel < vel_list.min():
             print("Error, input wrong velocity!")
         m_idx = np.fabs(vel_list - des_vel).argmin()
         m_pair = self.pair_table[m_idx]
+        # 2. 更新本周期控制参数
         self.des_pair = m_pair
         self.des_air_time = m_pair[7]           # 半周期空中时间
         self.des_sup_time = m_pair[8]           # 半周期支撑时间
 
     # 计算控制器本周期内的【控制参数】
     def calculate_control_param(self):
+        # 0. 前提：本次apex状态和期望pair
         m_pair = self.des_pair
         x_now = self.this_x                 # 获取当前顶点状态
         # 1. 计算在标准pair下的控制增量 delta u
         delta_x = x_now - m_pair[0: 3]
         jac = self.dic_vel_jac[m_pair[1]]
         delta_u = np.dot(jac, delta_x.transpose())
-        delta_u_out = np.array((4,))
+        delta_u_out = np.array([0, 0, 0, 0])
         delta_u_out[0:3] = delta_u
         delta_u_out[-1] += -delta_u[-1]      # 冗余量约束设计得到
         self.this_du = delta_u_out
@@ -123,10 +127,10 @@ class BipedController:
             dy = 0.12
         else:
             dy = -0.12
-        t1 = rotate_x(alpha).dot(rotate_y(beta).dot(trans_xyz(0, dy, -0.2)))
+        t1 = utl.rotate_x(alpha).dot(utl.rotate_y(beta).dot(utl.trans_xyz(0, dy, -0.2)))
         p_in1 = np.linalg.inv(t1).dot(pw_ext)
         ang_a = np.arctan2(p_in1[1], abs(p_in1[2]))
-        t2 = rotate_x(ang_a)
+        t2 = utl.rotate_x(ang_a)
         p_in2 = np.linalg.inv(t2).dot(p_in1)
         x2, z2 = p_in2[0], p_in2[2]
         # print(p_in2)
@@ -161,7 +165,7 @@ class BipedController:
         alpha, beta, ks1, ks2 = self.this_u
         l0 = self.para[2]
         # 1. 计算腿部着地时状态
-        dx = l0 * np.cos(beta)*np.np.cos(alpha)
+        dx = l0 * np.cos(beta) * np.cos(alpha)
         dy = l0 * np.sin(beta)
         dz = -l0 * np.cos(beta)*np.sin(alpha)
         p_end = np.array([dx, dy, dz])
@@ -193,14 +197,14 @@ class BipedController:
         else:
             coe = 1
         # 2. 首先处理当前准备触地的腿
-        if self.is_init:
+        if self.cycle_cnt == 1:
             # 如果仿真刚开始
             p_end = self.p_end + coe * np.array([0., 0.12, 0])
             a_end = self.a_end
         else:
             p_end, a_end = self.p_end, self.a_end
         a_begin = np.array([a_end[0], a_end[1], -a_end[2]])
-        p_begin = np.array(-p_end[0], p_end[1], p_end[2])
+        p_begin = np.array([-p_end[0], p_end[1], p_end[2]])
         # 2.1 直角坐标空间下的关键点位置
         p1 = tuple(p_begin)
         p2 = tuple(p_begin + 0.1 * a_begin)
@@ -227,10 +231,9 @@ class BipedController:
         # 3. 让我们来处理另一条腿吧
         p_end = np.array([p_end[0], coe*0.12, p_end[2]])  #
         a_end = np.array([a_end[0], 0.0, a_end[2]])       # 方向向前
-        if self.is_init:
+        if self.cycle_cnt == 1:
             p_begin = np.array([-p_end[0], p_end[1], p_end[2]])    # x位置反向
             a_begin = np.array([a_end[0], a_end[1], -a_end[2]])    # z方向相反
-            self.is_init = False
         else:
             p_begin = self.p_begin
             a_begin = self.a_begin
@@ -261,71 +264,67 @@ class BipedController:
     # 返回该周期开始后dt时间，左右足端的位置和速度
     def swing_get_planning(self, dt):
         # 1. 获取信息
-        t_air= self.des_air_time
+        t_air = self.des_air_time
         t_sup = self.des_sup_time
         # 2. 计算
         t_tot = t_air * 2 + t_sup          # 空中的总时间
         p_c = dt/t_tot                     # 在曲线上的进度
-        
+        left = self.this_curve_l.derivatives(p_c, order=1)
+        right = self.this_curve_r.derivatives(p_c, order=1)
+        return left, right
 
     # -----------------------------------------
-    # 函数： 根据控制pair，创建标准曲线表达
-    # 说明：该函数只生成标准的规划
-    # 将前置条件作为参数传入，保证理解
+    # 机器人控制：
+    # 输出[tau1 ……tau6]的控制量（no）-->直接控制
     # -----------------------------------------
-    def curve_swing_planning(self, pair, leg):
-        # 触地竖直速度估计，只在local用到的变量就放在local
-        h0, vx0, vy0 = self.this_x
-        alpha, beta, ks1, ks2 = self.this_u
-        # 1. 获取着地时刻速度方向
-        a_begin = self.a_begin
-        a_end = self.a_end
-        # 2. 计算曲线上的点
-        p1 = (-self.l0 * np.cos(alpha), 0.0)
-        p2 = (p1[0] + a_begin[0]*0.1, p1[1] + a_begin[1]*0.1)
-        p3 = (0, 0.3)
-        p5 = (self.l0 * np.cos(alpha), 0.0)
-        p4 = (p5[0] + a_end[0]*0.1, p5[1] + a_end[1]*0.1)
-        # 3. 构造曲线对象（实际上确实只需要一条规划曲线就可以）
-        tmp_curve = BSpline.Curve()
-        tmp_curve.ctrlpts = (p1, p2, p3, p4, p5)
-        tmp_curve.delta = 0.01
-        tmp_curve.degree = 4
-        tmp_curve.knotvector = utilities.generate_knot_vector(4, len(tmp_curve.ctrlpts))
-        tmp_curve.evaluate()
-        # 4. 传递给对应的腿---只使用一条曲线
-        # self.this_curve = tmp_curve
-
-
-    # -----------------------------------------
-    # 函数：仿真开始初始化在空中的状态
-    # 需要参数：命令状态，
-    # 此时状态 <足端位置， 足端速度>
-    # -----------------------------------------
-    # def init_swing_planning(self):
-
-
-
-    # -----------输出[tau1 ……tau5]的控制量-----------
     def robot_control(self):
+        # 获取一些必要信息
+        rid = self.robot_id
+        g = self.para[1]
         # 获取机器人状态
-        vel = p.getBaseVelocity(self.robot_id)
-        pos = p.getBasePositionAndOrientation(self.robot_id)
-        contact_list = p.getContactPoints(self.robot_id, planeId)
-
-        if len(contact_list):
-            # body_pos = p.getBasePositionAndOrientation(self.robot_id)
-            self.status = 'ground'
-        else:
-            self.status = 'air'
+        vel = p.getBaseVelocity(rid)
+        pos = p.getBasePositionAndOrientation(rid)
+        contact_list = p.getContactPoints(rid, planeId)
 
         if self.status == 'air':
-            if len(self.this_x) == 0:   # 如果没有初始高度数据
-                h0 = pos[0][2] + 0.5*vel[0][2]*vel[0][2]/g
-                self.this_x = [h0, vel[0][0], vel[0][1]]
-                # self.control_para_calculation()         # 计算控制参数
-            # 计算当前腿部规划点
-
+            # 如果刚从其他状态进入air状态-只需要在进入阶段执行一次
+            if self.status_change:
+                # 计算本次能达到的顶点高度
+                h0 = pos[0][2] + 0.5 * vel[0][2] * vel[0][2] / g
+                self.this_x = np.array([h0, vel[0][0], vel[0][1]])
+                # 更新本周期的控制pair，计算jac矩阵，以及控制参数
+                self.choose_pair_from_speed()
+                self.calculate_control_param()
+                self.swing_related_calculation()
+                if self.cycle_cnt % 2:
+                    leg_down = 'left'
+                else:
+                    leg_down = 'right'
+                self.swing_curve_planning(leg_down)
+                if self.cycle_cnt == 1:    # 第一圈，的初始化
+                    drop_time = np.sqrt(2 * h0 / abs(g))
+                    # 系统初始，设置关节位置
+                    cycle_t = self.des_air_time*2 + self.des_sup_time - drop_time
+                    lj, rj = self.swing_get_planning(cycle_t)
+                    # 左腿初始位置和速度
+                    p.resetJointState(rid, 0, lj[0][0], targetVelocity=lj[1][0])
+                    p.resetJointState(rid, 1, lj[0][1], targetVelocity=lj[1][1])
+                    p.resetJointState(rid, 2, lj[0][2], targetVelocity=lj[1][2])
+                    # 右腿初始位置和速度
+                    p.resetJointState(rid, 4, rj[0][0], targetVelocity=rj[1][0])
+                    p.resetJointState(rid, 5, rj[0][1], targetVelocity=rj[1][1])
+                    p.resetJointState(rid, 6, rj[0][2], targetVelocity=rj[1][2])
+            else:
+                # 如果不是刚进入腾空状态，直接获取状态并控制即可
+                lj, rj = self.swing_get_planning(self.this_t)
+                self.position_control_leg(lj[0], 'left')
+                self.position_control_leg(rj[0], 'right')
+                # 判定是否进行状态转化（即是否触地）
+                if len(contact_list):
+                    self.status = 'ground'
+        # 触地部分控制
+        elif self.status is 'ground':
+            print('into ground')
 
 
 # 准备环境
@@ -338,11 +337,12 @@ planeId = p.loadURDF("plane.urdf")
 cubeStartPos = [0, 0, 1.5]
 cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
 RobotId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
-p.resetBaseVelocity(RobotId, [1, 0, 0])
+p.resetBaseVelocity(RobotId, [2.0, 0, 0])
 mode = p.VELOCITY_CONTROL
 # 控制器
 bc = BipedController(RobotId)
 bc.load_table('./data/stable_pair.csv')
+bc.set_target_vel(3.0)
 
 for i in range(600):
     # 控制程序

@@ -135,7 +135,7 @@ def sim_cycle(pairs, b_para):
     init_s = in_sol3.y[:, -1]
     in_sol4 = integrate.solve_ivp(sys_fun, t_span, init_s, t_eval=t_eval, events=event_fun, **options)
 
-    print('simulation finished!')
+    # print('simulation finished!')
     in_foot_point = [x_f, y_f, z_f]
     return [in_sol1, in_sol2, in_sol3, in_sol4, in_foot_point]
 
@@ -167,8 +167,8 @@ def get_next_apex_status(pair, b_para):
 
 # 对单个pair计算雅可比矩阵
 # pair - <高度 速度x 速度>
-def control_jac_calculation(pair):
-    m_apex = get_next_apex_status(pair)
+def control_jac_calculation(pair, b_para):
+    m_apex = get_next_apex_status(pair, b_para)
     # 计算 jac x, u
     jac_combine = np.zeros(shape=(3, 7))
     for col in range(7):
@@ -178,7 +178,7 @@ def control_jac_calculation(pair):
         else:
             dx = dm_pair[col] * 0.001
         dm_pair[col] = dm_pair[col] + dx
-        dm_apex = get_next_apex_status(dm_pair)
+        dm_apex = get_next_apex_status(dm_pair, b_para)
         res = (dm_apex - m_apex) / dx
         jac_combine[:, col] = np.array(res).transpose()
     jac_x = jac_combine[:, 0:3]
