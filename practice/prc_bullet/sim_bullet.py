@@ -9,7 +9,7 @@ p.setGravity(0, 0, -10)
 
 # 创建模型
 planeId = p.loadURDF("plane.urdf")
-cubeStartPos = [0, 0, 1.5]
+cubeStartPos = [0, 0, 1.0]
 cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
 RobotId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
 p.resetBaseVelocity(RobotId, [0, 0, 0])
@@ -22,6 +22,6 @@ p.calculateMassMatrix()
 # 仿真循环
 for i in range(600):
     p.stepSimulation()
-    time.sleep(1./100.0)
+    time.sleep(1./1000.0)
 
 p.disconnect()

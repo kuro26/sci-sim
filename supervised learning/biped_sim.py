@@ -10,7 +10,7 @@ import tools.utils as utl
 import slip3D_ex
 
 g = 9.8
-sim_cycle = 0.01                             # 仿真粒度
+sim_cycle = 0.001                             # 仿真粒度
 
 
 def limit_in01(p_in):
@@ -170,6 +170,16 @@ class BipedController:
             p.setJointMotorControl2(rid, j_id[idx], md, targetPosition=angle[idx])
 
     # -----------------------------------------
+    # 支撑相关计算
+    # 1. 计算此时腿长
+    # -----------------------------------------
+    def calc_leg_length(self, angle, leg):
+        if leg == 'left':
+            dy = 0.12
+        else:
+            dy = -0.12
+
+    # -----------------------------------------
     # 在【本apex状态】【控制量】条件下
     # 1. 终点位置和速度
     # -----------------------------------------
@@ -282,6 +292,7 @@ class BipedController:
         t_sup = self.des_sup_time
         # 2. 计算
         t_tot = t_air * 2 + t_sup          # 空中的总时间
+        # print(dt, t_tot)
         if leg_down is 'left':            # 左右腿的不同进度
             p_c_l = (dt + t_air + t_sup)/t_tot
             p_c_r = dt/t_tot
@@ -336,7 +347,6 @@ class BipedController:
                 self.status_change = False
             else:
                 # 如果不是刚进入腾空状态，直接获取状态并控制即可
-                print([self.sys_t, self.start_time])
                 lj, rj = self.swing_get_planning(self.sys_t-self.start_time, leg_down)
                 self.position_control_leg(lj[0], 'left')
                 self.position_control_leg(rj[0], 'right')
@@ -355,7 +365,7 @@ p.setGravity(0, 0, -g)
 
 # 创建模型
 planeId = p.loadURDF("plane.urdf")
-cubeStartPos = [0, 0, 1.5]
+cubeStartPos = [0, 0, 1.]
 cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
 RobotId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
 p.resetBaseVelocity(RobotId, [2.0, 0, 0])
@@ -372,7 +382,7 @@ for i in range(600):
     if bc.status == 'ground':
         break
     p.stepSimulation()
-    time.sleep(sim_cycle)
+    time.sleep(sim_cycle*2)
 
 p.disconnect()
 
