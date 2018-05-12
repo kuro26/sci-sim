@@ -10,7 +10,15 @@ import tools.utils as utl
 import slip3D_ex
 
 g = 9.8
-sim_cycle = 0.01
+sim_cycle = 0.01                             # 仿真粒度
+
+
+def limit_in01(p_in):
+    if p_in < 0:
+        return 0
+    if p_in > 1:
+        return 1
+    return p_in
 
 
 # -------------------------------------------------------
@@ -20,7 +28,8 @@ sim_cycle = 0.01
 # -------------------------------------------------------
 class BipedController:
     def __init__(self, robot_id):
-        self.l0 = 1.0                 # 腿长
+        self.sys_t = 0                 # 系统时间
+        self.l0 = 1.0                  # 腿长
         self.para = [20.0, -9.8, 1.0]  # [m, g, l0]机器人参数
         self.status = 'air'
         self.contact_status = [0, 0]
@@ -30,6 +39,7 @@ class BipedController:
         # self.dic_sup_time = {}        # 速度索引的支撑时间
         self.pair_table = np.array([])
         # -----------本周期相关变量------------------
+        self.start_time = 0             # 本周起的起始时间
         self.this_x = np.array([])     # 起始顶点状态
         self.des_v = 0                 # 参考速度
         self.des_pair = []             # 理想pair
@@ -75,6 +85,10 @@ class BipedController:
     # 设置控制器的【期望速度】
     def set_target_vel(self, target_vel):
         self.des_v = target_vel
+
+    # 设置系统时间
+    def set_system_time(self, t):
+        self.sys_t = t
 
     # 选择控制器本周期的控制【pair】以及其他在table中的参数
     def choose_pair_from_speed(self):
@@ -262,15 +276,20 @@ class BipedController:
             self.this_curve_l = tmp_curve
 
     # 返回该周期开始后dt时间，左右足端的位置和速度
-    def swing_get_planning(self, dt):
+    def swing_get_planning(self, dt, leg_down):
         # 1. 获取信息
         t_air = self.des_air_time
         t_sup = self.des_sup_time
         # 2. 计算
         t_tot = t_air * 2 + t_sup          # 空中的总时间
-        p_c = dt/t_tot                     # 在曲线上的进度
-        left = self.this_curve_l.derivatives(p_c, order=1)
-        right = self.this_curve_r.derivatives(p_c, order=1)
+        if leg_down is 'left':            # 左右腿的不同进度
+            p_c_l = (dt + t_air + t_sup)/t_tot
+            p_c_r = dt/t_tot
+        else:
+            p_c_r = (dt + t_air + t_sup) / t_tot
+            p_c_l = dt / t_tot
+        left = self.this_curve_l.derivatives(limit_in01(p_c_l), order=1)
+        right = self.this_curve_r.derivatives(limit_in01(p_c_r), order=1)
         return left, right
 
     # -----------------------------------------
@@ -288,7 +307,12 @@ class BipedController:
 
         if self.status == 'air':
             # 如果刚从其他状态进入air状态-只需要在进入阶段执行一次
+            if self.cycle_cnt % 2:
+                leg_down = 'left'
+            else:
+                leg_down = 'right'
             if self.status_change:
+                self.start_time = self.sys_t  # 获取本周期的起始时间
                 # 计算本次能达到的顶点高度
                 h0 = pos[0][2] + 0.5 * vel[0][2] * vel[0][2] / g
                 self.this_x = np.array([h0, vel[0][0], vel[0][1]])
@@ -296,16 +320,11 @@ class BipedController:
                 self.choose_pair_from_speed()
                 self.calculate_control_param()
                 self.swing_related_calculation()
-                if self.cycle_cnt % 2:
-                    leg_down = 'left'
-                else:
-                    leg_down = 'right'
                 self.swing_curve_planning(leg_down)
                 if self.cycle_cnt == 1:    # 第一圈，的初始化
-                    drop_time = np.sqrt(2 * h0 / abs(g))
+                    self.start_time = -self.des_air_time/2                 # 第一圈的起始时间在之前
                     # 系统初始，设置关节位置
-                    cycle_t = self.des_air_time*2 + self.des_sup_time - drop_time
-                    lj, rj = self.swing_get_planning(cycle_t)
+                    lj, rj = self.swing_get_planning(self.sys_t-self.start_time, 'left')
                     # 左腿初始位置和速度
                     p.resetJointState(rid, 0, lj[0][0], targetVelocity=lj[1][0])
                     p.resetJointState(rid, 1, lj[0][1], targetVelocity=lj[1][1])
@@ -314,9 +333,11 @@ class BipedController:
                     p.resetJointState(rid, 4, rj[0][0], targetVelocity=rj[1][0])
                     p.resetJointState(rid, 5, rj[0][1], targetVelocity=rj[1][1])
                     p.resetJointState(rid, 6, rj[0][2], targetVelocity=rj[1][2])
+                self.status_change = False
             else:
                 # 如果不是刚进入腾空状态，直接获取状态并控制即可
-                lj, rj = self.swing_get_planning(self.this_t)
+                print([self.sys_t, self.start_time])
+                lj, rj = self.swing_get_planning(self.sys_t-self.start_time, leg_down)
                 self.position_control_leg(lj[0], 'left')
                 self.position_control_leg(rj[0], 'right')
                 # 判定是否进行状态转化（即是否触地）
@@ -346,6 +367,7 @@ bc.set_target_vel(3.0)
 
 for i in range(600):
     # 控制程序
+    bc.set_system_time(i*sim_cycle)
     bc.robot_control()
     if bc.status == 'ground':
         break
