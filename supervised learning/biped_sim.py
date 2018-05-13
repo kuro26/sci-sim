@@ -171,13 +171,33 @@ class BipedController:
 
     # -----------------------------------------
     # 支撑相关计算
-    # 1. 计算此时腿长
+    # 1. 计算此时腿部坐标系
+    # 2. 计算此时腿长
     # -----------------------------------------
-    def calc_leg_length(self, angle, leg):
-        if leg == 'left':
+    def calc_forward_length(self, leg):
+        # 获取必要信息
+        rid = self.robot_id
+        if leg == 'left':       # 左腿角度及偏移
             dy = 0.12
+            ang_a = p.getJointState(rid, 0)[0]
+            ang_b = p.getJointState(rid, 1)[0]
+            ang_c = p.getJointState(rid, 2)[0]
         else:
             dy = -0.12
+            ang_a = p.getJointState(rid, 4)[0]
+            ang_b = p.getJointState(rid, 5)[0]
+            ang_c = p.getJointState(rid, 6)[0]
+        # 计算腿端点在机体坐标系下(注意不是世界坐标系)的位置
+        t1 = utl.trans_xyz(0, dy, -0.2)
+        t2 = utl.rotate_x(ang_a).dot(utl.rotate_y(ang_b).dot(utl.trans_xyz(0, 0, -0.5)))
+        t3 = utl.rotate_y(ang_c)                       # 膝关节转动
+        pos_ed = np.array([[0.], [0.], [-0.5], [1]])   # 末坐标系下的位置扩展
+        p_w = t1.dot(t2.dot(t3.dot(pos_ed)))           # 机体坐标系下的位置
+        leg_len = np.sqrt(p_w[0]*p_w[0] + p_w[1]*p_w[1] + p_w[2]*p_w[2])   # 腿长度
+        return p_w, leg_len
+
+
+
 
     # -----------------------------------------
     # 在【本apex状态】【控制量】条件下

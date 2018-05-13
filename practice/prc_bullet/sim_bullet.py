@@ -11,17 +11,17 @@ p.setGravity(0, 0, -10)
 planeId = p.loadURDF("plane.urdf")
 cubeStartPos = [0, 0, 1.0]
 cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
-RobotId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
+RobotId = p.loadURDF("../../../supervised learning/bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
 p.resetBaseVelocity(RobotId, [0, 0, 0])
 mode = p.VELOCITY_CONTROL
 # p.setJointMotorControl2(RobotId, 0, mode, targetVelocity=1, force=100)
 # p.setJointMotorControl2(RobotId, 1, mode, targetVelocity=1, force=100)
 # p.setJointMotorControl2(RobotId, 4, mode, targetVelocity=1, force=100)
-p.calculateMassMatrix()
+
 
 # 仿真循环
-for i in range(600):
+for i in range(6):
     p.stepSimulation()
     time.sleep(1./1000.0)
 
-p.disconnect()
+# p.disconnect()
