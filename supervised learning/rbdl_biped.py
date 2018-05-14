@@ -3,7 +3,7 @@ import rbdl
 
 
 # 创建模型
-def boped_model_create():
+def biped_model_create():
     model = rbdl.Model()
     model.gravity = np.array([0.0, 0.0, -9.81])
     thigh_len = 0.5
