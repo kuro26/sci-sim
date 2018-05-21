@@ -124,7 +124,7 @@ class BipedController:
         self.this_pair[0:3] = x_now.tolist()
         self.this_pair[3:7] = self.this_u.tolist()
         # 3. 仿真获取数据
-        sol1, sol2, sol3, sol4, foot_point = slip3D_ex.sim_cycle(self.this_pair, self.para)
+        # sol1, sol2, sol3, sol4, foot_point = slip3D_ex.sim_cycle(self.this_pair, self.para)
 
     # -----------------------------------------
     # 逆运动学：
@@ -373,8 +373,19 @@ class BipedController:
                 # 判定是否进行状态转化（即是否触地）
                 if len(contact_list):
                     self.status = 'ground'
+                    self.status_change = True
         # 触地部分控制
         elif self.status is 'ground':
+            if self.status_change:           # 进入地面初始化
+                self.status_change = False
+                # 计算支撑轨迹
+
+            # 计算期望运动的PD控制量
+            # 1. body质心轨迹跟踪，需要一个f(t)-->质心轨迹
+
+            # 2. 摆动腿轨迹跟踪
+
+            # 3. 稳定body角度为0，角动量为0
             print('into ground')
 
 
