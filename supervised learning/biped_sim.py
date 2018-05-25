@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from geomdl import BSpline
 from geomdl import utilities
+from scipy.interpolate import interp1d
 
 import tools.utils as utl
 import slip3D_ex
@@ -27,13 +28,14 @@ def limit_in01(p_in):
 # pairs <h0, vx0, vy0, alpha, beta, ks1, ks2>
 # -------------------------------------------------------
 class BipedController:
-    def __init__(self, robot_id):
+    def __init__(self, robot_id, plane_id):
         self.sys_t = 0                 # 系统时间
         self.l0 = 1.0                  # 腿长
         self.para = [20.0, -9.8, 1.0]  # [m, g, l0]机器人参数
         self.status = 'air'
         self.contact_status = [0, 0]
         self.robot_id = robot_id
+        self.plane_id = plane_id
         self.dic_vel_jac = {}         # 由速度索引的控制雅可比矩阵
         # self.dic_air_time = {}        # 速度索引半周期
         # self.dic_sup_time = {}        # 速度索引的支撑时间
@@ -58,6 +60,10 @@ class BipedController:
         self.p_end = np.array([])
         self.status_change = True      # 初始默认有一个状态转换
         self.cycle_cnt = 1             # 半周期计数
+        # 支撑阶段相关数据
+        self.path_gen = []             # 质心路径生成器
+        self.t_sup_max = 0
+        self.t_sup_begin = 0             # 支撑相初始时间
 
     # -----------------------------------------
     # 导入表格
@@ -121,14 +127,19 @@ class BipedController:
         # 2. 计算本周期应用的pair
         #                                    增益系数
         self.this_u = np.array(m_pair[3:7]) + 0.1 * self.this_du
+        if self.cycle_cnt == 1:
+            self.this_u[1] = np.pi/25        # 修改第一个周期的左脚位置
         self.this_pair[0:3] = x_now.tolist()
         self.this_pair[3:7] = self.this_u.tolist()
+        # 3. 对第一次的控制量进行处理
+
         # 3. 仿真获取数据
         # sol1, sol2, sol3, sol4, foot_point = slip3D_ex.sim_cycle(self.this_pair, self.para)
 
     # -----------------------------------------
     # 逆运动学：
     # 伪世界坐标系(位置固定在body上，)转化到关节坐标系
+    # 需要用到body的姿态
     # -----------------------------------------
     def coord_fake_world2joint(self, p_world, leg):
         assert p_world.shape == (3, 1)
@@ -196,7 +207,17 @@ class BipedController:
         leg_len = np.sqrt(p_w[0]*p_w[0] + p_w[1]*p_w[1] + p_w[2]*p_w[2])   # 腿长度
         return p_w, leg_len
 
-
+    def get_joint_angle(self, leg_down):
+        rid = self.robot_id
+        if leg_down == 'left':
+            ang_a = p.getJointState(rid, 0)[0]
+            ang_b = p.getJointState(rid, 1)[0]
+            ang_c = p.getJointState(rid, 2)[0]
+        else:
+            ang_a = p.getJointState(rid, 4)[0]
+            ang_b = p.getJointState(rid, 5)[0]
+            ang_c = p.getJointState(rid, 6)[0]
+        return [ang_a, ang_b, ang_c]
 
 
     # -----------------------------------------
@@ -240,14 +261,10 @@ class BipedController:
             coe = -1
         else:
             coe = 1
+        # ---------------------------------
         # 2. 首先处理当前准备触地的腿
-        if self.cycle_cnt == 1:
-            # 如果仿真刚开始
-            p_end = self.p_end + coe * np.array([0., 0.12, 0])
-            a_end = self.a_end
-        else:
-            p_end, a_end = self.p_end, self.a_end
-        a_begin = np.array([a_end[0], a_end[1], -a_end[2]])
+        p_end, a_end = self.p_end, self.a_end
+        a_begin = np.array([a_end[0], a_end[1], -a_end[2]])   # 这是重规划的起始点
         p_begin = np.array([-p_end[0], p_end[1], p_end[2]])
         # 2.1 直角坐标空间下的关键点位置
         p1 = tuple(p_begin)
@@ -272,6 +289,7 @@ class BipedController:
             self.this_curve_l = tmp_curve
         else:
             self.this_curve_r = tmp_curve
+        # ----------------------------
         # 3. 让我们来处理另一条腿吧
         p_end = np.array([p_end[0], coe*0.12, p_end[2]])  #
         a_end = np.array([a_end[0], 0.0, a_end[2]])       # 方向向前
@@ -324,10 +342,51 @@ class BipedController:
         return left, right
 
     # -----------------------------------------
+    # 获取支撑阶段的轨迹
+    # np.array([x, y, z, vx, vy, vz])
+    # -----------------------------------------
+    def sup_get_com_trajectory(self, t):
+        if t > self.t_sup_max:
+            t = self.t_sup_max
+        tra = []
+        for idx in range(6):
+            tra.append(self.path_gen[idx](t))
+        return np.array(tra)
+
+    # -----------------------------------------
+    # 获取支撑阶段的真实位置（相对于接触点的）
+    # 这部分实际上是机体自身的定位问题
+    # 理想的是通过【当前关节角度】和【body的倾角】进行计算
+    # 毕竟实际上我们也不可能获得接触点的位置
+    # -----------------------------------------
+    def sup_get_com_real_pos(self, leg):
+        # 1. 获取对应到的信息
+        rid = self.robot_id
+        b_po = p.getBasePositionAndOrientation(rid)
+        alpha, beta, gamma = p.getEulerFromQuaternion(b_po[1])
+        if leg == 'left':
+            dy = 0.12
+            ang_a = p.getJointState(rid, 0)[0]
+            ang_b = p.getJointState(rid, 1)[0]
+            ang_c = p.getJointState(rid, 2)[0]
+        else:
+            dy = -0.12
+            ang_a = p.getJointState(rid, 4)[0]
+            ang_b = p.getJointState(rid, 5)[0]
+            ang_c = p.getJointState(rid, 6)[0]
+        t1 = utl.rotate_x(alpha).dot(utl.rotate_y(beta).dot(utl.trans_xyz(0, dy, -0.2)))
+        t2 = utl.rotate_x(ang_a).dot(utl.rotate_y(ang_b).dot(utl.trans_xyz(0, 0, -0.5)))
+        t3 = utl.rotate_y(ang_c)  # 膝关节转动
+        pos_ed = np.array([[0.], [0.], [-0.5], [1]])  # 末坐标系下的位置扩展
+        p_w = t1.dot(t2.dot(t3.dot(pos_ed)))  # 机体坐标系下的位置
+        return -p_w[0:3]                      # 反方向
+
+    # -----------------------------------------
     # 机器人控制：
     # 输出[tau1 ……tau6]的控制量（no）-->直接控制
     # -----------------------------------------
     def robot_control(self):
+        leg_down = ''                  # 初始化
         # 获取一些必要信息
         rid = self.robot_id
         g = self.para[1]
@@ -378,14 +437,50 @@ class BipedController:
         elif self.status is 'ground':
             if self.status_change:           # 进入地面初始化
                 self.status_change = False
-                # 计算支撑轨迹
+                # 仿真计算支撑过程轨迹
+                sol1, sol2, sol3, sol4, foot_point = slip3D_ex.sim_cycle(self.this_pair, self.para)
+                y1, y2 = sol2.y, sol3.y
+                t1 = sol2.t
+                t2 = t1[-1] + sol3.t
+                y_sup = np.concatenate((y1[:, 0:-1], y2), axis=1)
+                t_sup = np.concatenate((t1[0:-1], t2), axis=0)
+                self.t_sup_max = t_sup[-1]
+                self.path_gen = []            # 清空数据
+                for idx in range(6):
+                    self.path_gen.append(interp1d(t_sup, y_sup[i]))
+                self.t_sup_begin = self.sys_t     # 设置支撑开始时间为此时的系统时间
 
             # 计算期望运动的PD控制量
             # 1. body质心轨迹跟踪，需要一个f(t)-->质心轨迹
+            tmp = self.sup_get_com_trajectory(self.sys_t - self.t_sup_begin)
+            ref_com_pos, ref_com_vel = tmp[0:3], tmp[3:6]
+            rel_com_pos = self.sup_get_com_real_pos(leg_down)
+            rel_com_vel = p.getBaseVelocity(self.robot_id)
+            # PD计算重心期望加速度
 
             # 2. 摆动腿轨迹跟踪
+            # 参考轨迹
+            lj, rj = self.swing_get_planning(self.sys_t - self.start_time, leg_down)
+            # 实际位置和速度
+            if leg_down == 'left':
+                ang_a, vel_a = p.getJointState(rid, 0)[0:1]
+                ang_b, vel_b = p.getJointState(rid, 1)[0:1]
+                ang_c, vel_c = p.getJointState(rid, 2)[0:1]
+            else:
+                ang_a, vel_c = p.getJointState(rid, 4)[0:1]
+                ang_b, vel_c = p.getJointState(rid, 5)[0:1]
+                ang_c, vel_c = p.getJointState(rid, 6)[0:1]
+            # 基于误差的控制规划
+
 
             # 3. 稳定body角度为0，角动量为0
+            tmp = p.getBasePositionAndOrientation(rid)
+            rel_body_ang = p.getEulerFromQuaternion(tmp[0])
+
+
+            # 4. 稳定净角动量为0（先不考虑这个）
+
+            # 5. 优化求解最优控制力
             print('into ground')
 
 
@@ -402,7 +497,7 @@ RobotId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
 p.resetBaseVelocity(RobotId, [2.0, 0, 0])
 mode = p.VELOCITY_CONTROL
 # 控制器
-bc = BipedController(RobotId)
+bc = BipedController(RobotId, planeId)
 bc.load_table('./data/stable_pair.csv')
 bc.set_target_vel(3.0)
 

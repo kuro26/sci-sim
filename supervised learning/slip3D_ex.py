@@ -152,6 +152,7 @@ def sim_cycle_test(pairs, b_para):
     ax.plot([0], [0], [0], '*r')
     ax.plot([foot_point[0]], [foot_point[1]], [foot_point[2]], '*b')
     plt.show()
+    return sol2, sol3
     # 存储数据为csv文件
     # pd.DataFrame(sol1.y).to_csv('data/sol1.csv')
     # pd.DataFrame(sol2.y).to_csv('data/sol2.csv')
