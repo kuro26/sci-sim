@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot name="napkin">
+    <link name="base">
+
+    </link>
+</robot>
