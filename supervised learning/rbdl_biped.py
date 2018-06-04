@@ -1,5 +1,6 @@
 import numpy as np
 import rbdl
+import matplotlib.pyplot as plt
 
 
 # 创建模型
@@ -63,4 +64,6 @@ def biped_model_create():
     cs_right.AddConstraint(id_right_shank, c_point, np.array([0., 1., 0.]), 'ground_y'.encode('utf-8'))
     cs_right.AddConstraint(id_right_shank, c_point, np.array([0., 0., 1.]), 'ground_z'.encode('utf-8'))
     return model, cs_left, cs_right
+
+
 

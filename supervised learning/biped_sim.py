@@ -384,10 +384,49 @@ class BipedController:
     # 更新系统状态到模型
     # -----------------------------------------
     # 代价函数计算:
-    # 1. 需要Robot
+    # 1. tau, 表示输入的力样本
+    # 2. 在函数初始仿真一步，计算结果，结束时再恢复为原来的状态
+    # 3. pb默认的步长时1/240.0
     # -----------------------------------------
-    def cost_function(self):
+    def cost_function(self, tau, leg_down):
+        time_step = 1/240.0                    # 单步时间长度
+        rid = self.robot_id
+        state_id = p.saveState()               # 保存当前系统状态
+        md = p.TORQUE_CONTROL   # 扭矩控制模式
+        leg_id_li = [0, 1, 2, 4, 5, 6]
+        for i in range(6):
+            p.setJointMotorControl2(rid, leg_id_li[i], md, tau[i])
+        # 1. 获取前一时刻状态
+        # 机体速度和角速度
+        b_lv, b_av = np.array(p.getBaseVelocity(self.robot_id))
+        # 摆动腿位置
+        if leg_down == 'left':
+            vel_a = p.getJointState(rid, 0)[1]
+            vel_b = p.getJointState(rid, 1)[1]
+            vel_c = p.getJointState(rid, 2)[1]
+        else:
+            vel_a = p.getJointState(rid, 4)[1]
+            vel_b = p.getJointState(rid, 5)[1]
+            vel_c = p.getJointState(rid, 6)[1]
 
+        # 2. 进行一步仿真
+        p.stepSimulation()      # 进行一个步长为1/240s的仿真
+        # 3. 获取仿真一步后的速度等状态
+        # body加速度
+        acc_bv = (np.array(p.getBaseVelocity(self.robot_id)[0]) - b_lv)/time_step
+        # 摆动腿加速度
+        if leg_down == 'left':
+            acc_a = (p.getJointState(rid, 0)[1] - vel_a) / time_step
+            acc_b = (p.getJointState(rid, 1)[1] - vel_b) / time_step
+            acc_c = (p.getJointState(rid, 2)[1] - vel_c) / time_step
+        else:
+            acc_a = (p.getJointState(rid, 4)[1] - vel_a) / time_step
+            acc_b = (p.getJointState(rid, 5)[1] - vel_b) / time_step
+            acc_c = (p.getJointState(rid, 6)[1] - vel_c) / time_step
+        # body角加速度
+        acc_ba = (np.array(p.getBaseVelocity(self.robot_id)[1]) - b_av)/time_step
+        # 4. 与期望加速度计算Cost函数
+        
     # -----------------------------------------
     # 机器人控制：
     # 输出[tau1 ……tau6]的控制量（no）-->直接控制
@@ -462,7 +501,7 @@ class BipedController:
             tmp = self.sup_get_com_trajectory(self.sys_t - self.t_sup_begin)
             ref_com_pos, ref_com_vel = tmp[0:3], tmp[3:6]
             rel_com_pos = self.sup_get_com_real_pos(leg_down)
-            rel_com_vel = p.getBaseVelocity(self.robot_id)
+            rel_com_vel = p.getBaseVelocity(self.robot_id)[1]
             # PD计算重心期望加速度
 
             # 2. 摆动腿轨迹跟踪
@@ -474,8 +513,8 @@ class BipedController:
                 ang_b, vel_b = p.getJointState(rid, 1)[0:1]
                 ang_c, vel_c = p.getJointState(rid, 2)[0:1]
             else:
-                ang_a, vel_c = p.getJointState(rid, 4)[0:1]
-                ang_b, vel_c = p.getJointState(rid, 5)[0:1]
+                ang_a, vel_a = p.getJointState(rid, 4)[0:1]
+                ang_b, vel_b = p.getJointState(rid, 5)[0:1]
                 ang_c, vel_c = p.getJointState(rid, 6)[0:1]
             # 基于误差的控制规划
 
