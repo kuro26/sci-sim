@@ -17,7 +17,7 @@ cube = p.createMultiBody(mass, cuid, basePosition=[0., 0., 2.])
 
 for i in range(600):
     p.stepSimulation()
-    contact_list = p.getContactPoints(cube, planeId)
+    contact_list = p.getContactPoints(cube)
     if len(contact_list):
         for item in contact_list:
             print(item[5], item[9])

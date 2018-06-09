@@ -6,12 +6,13 @@ import numpy as np
 from geomdl import BSpline
 from geomdl import utilities
 from scipy.interpolate import interp1d
+from scipy.optimize import minimize
 
 import tools.utils as utl
 import slip3D_ex
 
 g = 9.8
-sim_cycle = 0.001                             # 仿真粒度
+sim_cycle = 0.1                             # 仿真粒度
 
 
 def limit_in01(p_in):
@@ -171,14 +172,25 @@ class BipedController:
     # 足端位置控制
     # 基于三关节角度的足端位置控制
     # -----------------------------------------
-    def position_control_leg(self, angle, leg):
-        md = p.POSITION_CONTROL
+    def position_control_leg(self, angle, vel, leg):
+        md = p.TORQUE_CONTROL
+        # md = p.POSITION_CONTROL
         rid = self.robot_id
         j_id = [4, 5, 6]
+        max_force = 20
         if leg == 'left':
             j_id = [0, 1, 2]
         for idx in range(3):
-            p.setJointMotorControl2(rid, j_id[idx], md, targetPosition=angle[idx])
+            # p.setJointMotorControl2(rid, j_id[idx], md, targetPosition=angle[idx], force=max_force)
+            kp, kd = 1, 0.1
+            q, dq = p.getJointState(rid, j_id[idx])[0:2]
+            tor = kp*(angle[idx] - q) + kd*(vel[idx]-dq)
+            print(tor, angle[idx], q, vel[idx], dq)
+            p.setJointMotorControl2(
+                bodyUniqueId=rid,
+                jointIndex=j_id[idx],
+                controlMode=md,
+                force=tor)
 
     # -----------------------------------------
     # 支撑相关计算
@@ -218,7 +230,6 @@ class BipedController:
             ang_b = p.getJointState(rid, 5)[0]
             ang_c = p.getJointState(rid, 6)[0]
         return [ang_a, ang_b, ang_c]
-
 
     # -----------------------------------------
     # 在【本apex状态】【控制量】条件下
@@ -385,11 +396,12 @@ class BipedController:
     # -----------------------------------------
     # 代价函数计算:
     # 1. tau, 表示输入的力样本
-    # 2. 在函数初始仿真一步，计算结果，结束时再恢复为原来的状态
-    # 3. pb默认的步长时1/240.0
+    # 2. des_a， 期望的加速度，是一个结构
+    # 3. 在函数初始仿真一步，计算结果，结束时再恢复为原来的状态
+    # 4. pb默认的步长时1/240.0,改成1/1000了
     # -----------------------------------------
-    def cost_function(self, tau, leg_down):
-        time_step = 1/240.0                    # 单步时间长度
+    def cost_function(self, tau, des_a, leg_down):
+        time_step = 1/1000.0                    # 单步时间长度
         rid = self.robot_id
         state_id = p.saveState()               # 保存当前系统状态
         md = p.TORQUE_CONTROL   # 扭矩控制模式
@@ -398,16 +410,16 @@ class BipedController:
             p.setJointMotorControl2(rid, leg_id_li[i], md, tau[i])
         # 1. 获取前一时刻状态
         # 机体速度和角速度
-        b_lv, b_av = np.array(p.getBaseVelocity(self.robot_id))
+        b_lv, b_av = np.array(p.getBaseVelocity(rid))
         # 摆动腿位置
         if leg_down == 'left':
-            vel_a = p.getJointState(rid, 0)[1]
-            vel_b = p.getJointState(rid, 1)[1]
-            vel_c = p.getJointState(rid, 2)[1]
-        else:
             vel_a = p.getJointState(rid, 4)[1]
             vel_b = p.getJointState(rid, 5)[1]
             vel_c = p.getJointState(rid, 6)[1]
+        else:
+            vel_a = p.getJointState(rid, 0)[1]
+            vel_b = p.getJointState(rid, 1)[1]
+            vel_c = p.getJointState(rid, 2)[1]
 
         # 2. 进行一步仿真
         p.stepSimulation()      # 进行一个步长为1/240s的仿真
@@ -423,10 +435,51 @@ class BipedController:
             acc_a = (p.getJointState(rid, 4)[1] - vel_a) / time_step
             acc_b = (p.getJointState(rid, 5)[1] - vel_b) / time_step
             acc_c = (p.getJointState(rid, 6)[1] - vel_c) / time_step
+        acc_foot = np.array([acc_a, acc_b, acc_c])
         # body角加速度
         acc_ba = (np.array(p.getBaseVelocity(self.robot_id)[1]) - b_av)/time_step
         # 4. 与期望加速度计算Cost函数
-        
+        w_com = 25
+        w_bod = np.array([20, 60, 14])
+        w_foot = 1
+        c_com = np.linalg.norm(w_com * (acc_bv - des_a['com']))
+        c_bod = np.linalg.norm(w_bod * (acc_ba - des_a['body']))
+        c_foo = np.linalg.norm(w_foot * (acc_foot - des_a['foot']))
+        # c_tau= 0.001 * sum(abs(tau))           # 关节扭矩之和
+        cost = c_com + c_bod + c_foo
+        # 获取地面接触力状态，似乎pybullet没法获取切向力的，只有法向力
+        #contact_list = p.getContactPoints(rid)
+        # 5. 恢复状态并返回cost
+        p.restoreState(state_id)
+        return cost
+
+    # -----------------------------------------
+    # 优化计算此刻控制力
+    # 就目前的状况来说，我们不需要速度很快，所以可以用其他的优化方法
+    # 变量是：地面接触力，关节加速度，关节力
+    # 等式约束是，关节里可以计算出，地面接触力和关节加速度
+    # 不等式约束是，摩擦锥约束，力边界约束
+    # <--上面是一种方式
+    # 变量是：关节力
+    # 约束是：关节力大小
+    # -----------------------------------------
+    def optimal_control(self, des_a, leg_down):
+        # 摩擦锥约束，力边界约束，看来摩擦锥是没办法了，引擎不允许
+        def cost(x):
+            return self.cost_function(x, des_a, leg_down)
+
+        def bound(x):
+            x1 = x + 40
+            x2 = 40 - x
+            return np.concatenate((x1,x2), axis=0)
+        ineq_cons = {'type': 'ineq',
+                     'fun': bound}
+        x0 = np.array([0, 0, 0, 0, 0, 0])
+        res = minimize(cost, x0, method='SLSQP', constraints=[
+            ineq_cons], options={'ftol': 1e-6, 'disp': True})
+        return res.x   # 返回优化的力
+
+
     # -----------------------------------------
     # 机器人控制：
     # 输出[tau1 ……tau6]的控制量（no）-->直接控制
@@ -473,8 +526,8 @@ class BipedController:
             else:
                 # 如果不是刚进入腾空状态，直接获取状态并控制即可
                 lj, rj = self.swing_get_planning(self.sys_t-self.start_time, leg_down)
-                self.position_control_leg(lj[0], 'left')
-                self.position_control_leg(rj[0], 'right')
+                self.position_control_leg(lj[0], lj[1], 'left')
+                self.position_control_leg(rj[0], rj[1], 'right')
                 # 判定是否进行状态转化（即是否触地）
                 if len(contact_list):
                     self.status = 'ground'
@@ -493,41 +546,64 @@ class BipedController:
                 self.t_sup_max = t_sup[-1]
                 self.path_gen = []            # 清空数据
                 for idx in range(6):
-                    self.path_gen.append(interp1d(t_sup, y_sup[i]))
+                    self.path_gen.append(interp1d(t_sup, y_sup[idx]))
                 self.t_sup_begin = self.sys_t     # 设置支撑开始时间为此时的系统时间
 
             # 计算期望运动的PD控制量
             # 1. body质心轨迹跟踪，需要一个f(t)-->质心轨迹
+            des_a = dict()
             tmp = self.sup_get_com_trajectory(self.sys_t - self.t_sup_begin)
             ref_com_pos, ref_com_vel = tmp[0:3], tmp[3:6]
             rel_com_pos = self.sup_get_com_real_pos(leg_down)
-            rel_com_vel = p.getBaseVelocity(self.robot_id)[1]
+            rel_com_vel = np.array(p.getBaseVelocity(self.robot_id)[1])
             # PD计算重心期望加速度
+            kp, kd = 100, 10
+            des_a['com'] = kp*(ref_com_pos-rel_com_pos) + kd*(ref_com_vel-rel_com_vel)
 
             # 2. 摆动腿轨迹跟踪
             # 参考轨迹
             lj, rj = self.swing_get_planning(self.sys_t - self.start_time, leg_down)
             # 实际位置和速度
             if leg_down == 'left':
-                ang_a, vel_a = p.getJointState(rid, 0)[0:1]
-                ang_b, vel_b = p.getJointState(rid, 1)[0:1]
-                ang_c, vel_c = p.getJointState(rid, 2)[0:1]
+                ang_a, vel_a = p.getJointState(rid, 4)[0:2]
+                ang_b, vel_b = p.getJointState(rid, 5)[0:2]
+                ang_c, vel_c = p.getJointState(rid, 6)[0:2]
+                ref_ang_q = np.array(rj[0])
+                ref_ang_dq = np.array(rj[1])
             else:
-                ang_a, vel_a = p.getJointState(rid, 4)[0:1]
-                ang_b, vel_b = p.getJointState(rid, 5)[0:1]
-                ang_c, vel_c = p.getJointState(rid, 6)[0:1]
+                ang_a, vel_a = p.getJointState(rid, 0)[0:2]
+                ang_b, vel_b = p.getJointState(rid, 1)[0:2]
+                ang_c, vel_c = p.getJointState(rid, 2)[0:2]
+                ref_ang_q = np.array(lj[0])
+                ref_ang_dq = np.array(lj[1])
+            real_ang_q = np.array([ang_a, ang_b, ang_c])
+            real_ang_dq = np.array([vel_a, vel_b, vel_c])
             # 基于误差的控制规划
-
+            kp, kd = 40, 5
+            des_a['foot'] = kp*(ref_ang_q-real_ang_q) + kd*(ref_ang_dq-real_ang_dq)
 
             # 3. 稳定body角度为0，角动量为0
+            kp, kd = 20, 4
             tmp = p.getBasePositionAndOrientation(rid)
-            rel_body_ang = p.getEulerFromQuaternion(tmp[0])
+            real_body_ang = np.array(p.getEulerFromQuaternion(tmp[1]))
+            real_body_vel = np.array(p.getBaseVelocity(rid))
+            des_a['body'] = -kp*real_body_ang - kd*real_body_vel
 
 
             # 4. 稳定净角动量为0（先不考虑这个）
 
             # 5. 优化求解最优控制力
-            print('into ground')
+            tau_ctrl = self.optimal_control(des_a, leg_down)
+            # tau_ctrl = np.array([0, 0, 0, 0, 0, 0])
+            md = p.TORQUE_CONTROL
+            leg_id_li = [0, 1, 2, 4, 5, 6]
+            print(tau_ctrl)
+            for idx in range(6):
+                p.setJointMotorControl2(
+                    bodyUniqueId=rid,
+                    jointIndex=leg_id_li[idx],
+                    controlMode=md,
+                    force=tau_ctrl[idx])
 
 
 # 准备环境
@@ -537,7 +613,7 @@ p.setGravity(0, 0, -g)
 
 # 创建模型
 planeId = p.loadURDF("plane.urdf")
-cubeStartPos = [0, 0, 1.]
+cubeStartPos = [0, 0, 1.3]
 cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
 RobotId = p.loadURDF("bipedRobotOne.urdf", cubeStartPos, cubeStartOrientation)
 p.resetBaseVelocity(RobotId, [2.0, 0, 0])
@@ -546,15 +622,15 @@ mode = p.VELOCITY_CONTROL
 bc = BipedController(RobotId, planeId)
 bc.load_table('./data/stable_pair.csv')
 bc.set_target_vel(3.0)
+p.setTimeStep(1/1000.)
 
-for i in range(600):
+for i in range(6000):
     # 控制程序
+    print(i)
     bc.set_system_time(i*sim_cycle)
     bc.robot_control()
-    if bc.status == 'ground':
-        break
     p.stepSimulation()
-    time.sleep(sim_cycle*2)
+    time.sleep(1/240.0)
 
 p.disconnect()
 
