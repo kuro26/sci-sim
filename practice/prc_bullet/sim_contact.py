@@ -12,6 +12,7 @@ p.setGravity(0, 0, -10)
 
 planeId = p.loadURDF("plane.urdf")
 cuid = p.createCollisionShape(p.GEOM_BOX, halfExtents=[1., 1., 1.])
+cuid = p.createCollisionShape(p.GEOM_CAPSULE)
 mass = 1.0
 cube = p.createMultiBody(mass, cuid, basePosition=[0., 0., 2.])
 

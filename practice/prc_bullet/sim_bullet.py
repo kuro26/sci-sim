@@ -24,13 +24,13 @@ p.resetJointState(RobotId, 6, 0.6, targetVelocity=0.0)  # np.pi/4
 # p.setJointMotorControl2(RobotId, 0, mode, targetVelocity=1, force=100)
 # p.setJointMotorControl2(RobotId, 1, mode, targetVelocity=1, force=100)
 # p.setJointMotorControl2(RobotId, 4, mode, targetVelocity=1, force=100)
-# zero_x = [0, 0, 0, 0, 0, 0]
-# p.calculateJacobian(RobotId, 2, (0., 0., -0.5), zero_x, zero_x, zero_x)      # 计算左脚雅可比矩阵
+zero_x = [0, 0, 0, 0, 0, 0]
+jac = p.calculateJacobian(RobotId, 2, (0., 0., -0.5), zero_x, zero_x, zero_x)      # 计算左脚雅可比矩阵
 # 计算结果6，7，8列是我们需要的
 
 # 仿真循环
-for i in range(6000):
-    p.stepSimulation()
-    time.sleep(1./240.0)
+# for i in range(6000):
+#     p.stepSimulation()
+#     time.sleep(1./240.0)
 
 p.disconnect()

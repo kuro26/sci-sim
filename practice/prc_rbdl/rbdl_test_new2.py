@@ -79,6 +79,7 @@ def data_gen(q=q0[:], qd=qd0[:], qdd=qdd0[:]):
     for i in range(int(t_max/t_cycle)):
         # 从源文件知道，这个动力学计算是不包括约束的，所以用这个计算约束没用
         # 改了一些封装之后可用了
+        print(q)
         rbdl.CalcContactSystemVariables(model, q, qd, tau, constrain_set_l1)
         H = constrain_set_l1.get_H()
         G = constrain_set_l1.get_G()
@@ -129,9 +130,9 @@ link4, = ax.plot([], [], 'r', lw=2)
 ax.grid()
 
 # 保存为gif文件
-gif_writer=animation.ImageMagickFileWriter(fps=2)
+# gif_writer=animation.ImageMagickFileWriter(fps=2)
 ani = animation.FuncAnimation(fig, run, data_gen, blit=False, interval=10, repeat=False, init_func=init)
-ani.save('res.gif',writer=gif_writer)
+# ani.save('res.gif',writer='imagemagick', fps=2)
 # gif_writer.finish()
 plt.show()
 
